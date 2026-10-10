@@ -1,0 +1,2 @@
+package com.aerosaga.mission;
+public enum MissionStatus { CREATED, SCHEDULED, IN_PROGRESS, SUSPENDED_OFFLINE, RECOVERING, RETURNING, COMPLETED, ABORTED, FAILED }

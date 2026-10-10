@@ -1,0 +1,56 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-aerosaga}
+      MYSQL_USER: ${MYSQL_USER:-aerosaga}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me_local_only}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_root_local_only}
+    ports: ["${MYSQL_PORT:-3307}:3306"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    depends_on:
+      mysql: {condition: service_healthy}
+    environment:
+      DB: mysql8
+      DB_PORT: 3306
+      MYSQL_SEEDS: mysql
+      MYSQL_USER: root
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:-change_root_local_only}
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    ports: ["7233:7233"]
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    depends_on: [temporal]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:5173
+    ports: ["${TEMPORAL_UI_PORT:-8233}:8080"]
+  backend:
+    build: ./backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-aerosaga}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-aerosaga}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-change_me_local_only}
+      AEROSAGA_TEMPORAL_ADDRESS: temporal:7233
+    ports: ["${BACKEND_PORT:-8080}:8080"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      temporal: {condition: service_started}
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    ports: ["${FRONTEND_PORT:-5173}:80"]
+    depends_on: [backend]
+volumes:
+  mysql_data:
