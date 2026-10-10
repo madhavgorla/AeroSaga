@@ -72,3 +72,7 @@ Replace the branch with your own. The ZIP contains project files and branch setu
 - Duplicate events, invalid inputs, abort/reroute, retries and timeouts are tested.
 - Clean checkout starts through Docker; CI passes.
 - README, diagrams, report, PPT, Postman collection and demo evidence are complete.
+
+## Publishing this ZIP to GitHub
+
+This archive includes `.git` with `main` and the four feature branches already created. Follow [`PUSH_TO_GITHUB_FIRST.md`](PUSH_TO_GITHUB_FIRST.md). Create an empty GitHub repository, then run `git remote add origin https://github.com/YOUR-USERNAME/AeroSaga.git`, `git push -u origin main`, and `git push origin --all`. Do not upload the files through the GitHub web interface if you want to preserve the pre-created local branches.
