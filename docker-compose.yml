@@ -25,7 +25,7 @@ services:
       MYSQL_SEEDS: mysql
       MYSQL_USER: root
       MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:-change_root_local_only}
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+#      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
     ports: ["7233:7233"]
   temporal-ui:
     image: temporalio/ui:2.34.0
