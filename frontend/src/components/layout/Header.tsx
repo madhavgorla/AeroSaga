@@ -1,10 +1,13 @@
 import React from 'react';
-import { Plane, Plus, RefreshCw, Menu, Radio, ShieldCheck } from 'lucide-react';
+import { Plane, Plus, RefreshCw, Menu, Radio, Sparkles, Mic } from 'lucide-react';
+import { AuthBar } from '../auth/AuthBar';
 
 interface HeaderProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   onOpenLaunchModal: () => void;
+  onOpenAIChat: () => void;
+  onOpenVoiceModal: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
   isMockMode: boolean;
@@ -15,6 +18,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentTab,
   onTabChange,
   onOpenLaunchModal,
+  onOpenAIChat,
+  onOpenVoiceModal,
   onRefresh,
   isRefreshing,
   isMockMode,
@@ -29,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#080d1a]/95 backdrop-blur-md border-b border-slate-800/80 px-4 md:px-6 py-3.5 flex items-center justify-between gap-8">
+    <header className="sticky top-0 z-40 w-full bg-[#080d1a]/95 backdrop-blur-md border-b border-slate-800/80 px-4 md:px-6 py-3 flex items-center justify-between gap-6">
       {/* Zone 1: Single text element wordmark / brand */}
       <div className="flex items-center gap-3 shrink-0">
         <button
@@ -50,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
             AEROSAGA
           </span>
         </button>
-        <span className="hidden lg:inline text-xs text-slate-500 font-mono-numbers">
+        <span className="hidden xl:inline text-xs text-slate-500 font-mono-numbers">
           · MISSION CONTROL
         </span>
       </div>
@@ -64,9 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
               key={item.id}
               onClick={() => onTabChange(item.id)}
               className={`whitespace-nowrap shrink-0 transition-colors py-1 relative ${
-                isActive
-                  ? 'text-sky-400 font-semibold'
-                  : 'hover:text-slate-200'
+                isActive ? 'text-sky-400 font-semibold' : 'hover:text-slate-200'
               }`}
             >
               {item.label}
@@ -78,24 +81,32 @@ export const Header: React.FC<HeaderProps> = ({
         })}
       </nav>
 
-      {/* Zone 3: Actions & 1 Primary CTA */}
-      <div className="flex items-center gap-3 shrink-0">
-        {/* Backend Connectivity Status Tag */}
-        <div
-          title={
-            isMockMode
-              ? 'Simulation Engine active (Spring Boot :8080 idle)'
-              : 'Connected to Live Spring Boot REST API'
-          }
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono-numbers bg-slate-900 border border-slate-800 text-slate-400"
+      {/* Zone 3: AI Copilot, Live Voice, Auth, and Primary CTA */}
+      <div className="flex items-center gap-2.5 shrink-0">
+        {/* Gemini AI Copilot button */}
+        <button
+          onClick={onOpenAIChat}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-sky-950 to-indigo-950 border border-sky-600/50 text-sky-200 hover:border-sky-400 transition-colors shadow-sm"
+          title="Open Gemini AI Mission Copilot"
         >
-          <Radio
-            className={`w-3 h-3 ${isMockMode ? 'text-amber-400' : 'text-emerald-400'}`}
-          />
-          <span>{isMockMode ? 'SIMULATION' : 'LIVE API'}</span>
-        </div>
+          <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+          <span className="hidden sm:inline">AI Copilot</span>
+        </button>
 
-        {/* Sync / Refresh */}
+        {/* Live Voice Audio button */}
+        <button
+          onClick={onOpenVoiceModal}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white hover:border-sky-500 transition-colors"
+          title="Open Gemini Live Voice Radio Channel"
+        >
+          <Mic className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="hidden sm:inline">Voice Radio</span>
+        </button>
+
+        {/* Firebase Authentication */}
+        <AuthBar />
+
+        {/* Refresh button */}
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
@@ -104,17 +115,17 @@ export const Header: React.FC<HeaderProps> = ({
           aria-label="Refresh fleet data"
         >
           <RefreshCw
-            className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-400' : ''}`}
+            className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-sky-400' : ''}`}
           />
         </button>
 
         {/* Primary CTA */}
         <button
           onClick={onOpenLaunchModal}
-          className="flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 active:bg-sky-700 rounded-lg shadow-sm shadow-sky-950 transition-colors whitespace-nowrap shrink-0 focus-visible:ring-2 focus-visible:ring-sky-400"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 active:bg-sky-700 rounded-lg shadow-sm transition-colors whitespace-nowrap shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Launch Mission</span>
+          <span className="hidden sm:inline">Launch Mission</span>
         </button>
       </div>
     </header>

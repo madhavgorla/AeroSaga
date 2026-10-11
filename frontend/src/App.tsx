@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import type { Drone, Mission, Waypoint } from './types';
 import { apiService } from './services/api';
+import { auth, db, handleFirestoreError, OperationType } from './services/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { TacticalMap } from './components/tactical/TacticalMap';
@@ -12,6 +14,8 @@ import { AbortModal } from './components/missions/AbortModal';
 import { RerouteMissionModal } from './components/missions/RerouteMissionModal';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { DiagnosticsPanel } from './components/diagnostics/DiagnosticsPanel';
+import { GeminiChatbot } from './components/ai/GeminiChatbot';
+import { LiveVoiceModal } from './components/ai/LiveVoiceModal';
 import { ToastProvider, useToast } from './components/ui/Toast';
 import {
   Activity,
@@ -21,9 +25,9 @@ import {
   Plane,
   Plus,
   RefreshCw,
-  AlertTriangle,
-  CheckCircle2,
   ShieldCheck,
+  Sparkles,
+  Mic,
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -43,6 +47,10 @@ function DashboardContent() {
   const [isLaunchOpen, setIsLaunchOpen] = useState<boolean>(false);
   const [abortTargetId, setAbortTargetId] = useState<string | null>(null);
   const [rerouteTargetMission, setRerouteTargetMission] = useState<Mission | null>(null);
+
+  // AI & Voice Modals state
+  const [isAIChatOpen, setIsAIChatOpen] = useState<boolean>(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
 
   // Fetch all fleet data
   const loadData = useCallback(
@@ -82,7 +90,7 @@ function DashboardContent() {
     loadData();
   }, [loadData]);
 
-  // Handle Create Mission
+  // Handle Create Mission (with optional Firestore persistence)
   const handleCreateMission = async (data: {
     droneId: string;
     destination: string;
@@ -90,6 +98,24 @@ function DashboardContent() {
   }) => {
     try {
       const created = await apiService.createMission(data);
+
+      // If user is authenticated with Firebase, save record to Firestore
+      if (auth.currentUser) {
+        try {
+          await setDoc(doc(db, 'missions', created.missionId), {
+            missionId: created.missionId,
+            workflowId: created.workflowId,
+            droneId: created.droneId,
+            destination: created.destination,
+            status: created.status,
+            createdAt: created.createdAt,
+            userId: auth.currentUser.uid,
+          });
+        } catch (fsErr) {
+          console.warn('Firestore sync note:', fsErr);
+        }
+      }
+
       showToast({
         type: 'success',
         title: 'Mission Dispatched',
@@ -196,11 +222,13 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#080d1a] text-slate-100 flex flex-col">
-      {/* Top Bar Contract (Strict 3-zone Header) */}
+      {/* Top Bar Contract (Strict 3-zone Header with AI and Auth) */}
       <Header
         currentTab={currentTab}
         onTabChange={setCurrentTab}
         onOpenLaunchModal={() => setIsLaunchOpen(true)}
+        onOpenAIChat={() => setIsAIChatOpen(true)}
+        onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
         onRefresh={() => loadData(true)}
         isRefreshing={refreshing}
         isMockMode={isMockMode}
@@ -236,6 +264,14 @@ function DashboardContent() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAIChatOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-200 bg-sky-950/60 border border-sky-700/60 hover:bg-sky-900/60 rounded-lg shadow-sm transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                <span>Ask AI Copilot</span>
+              </button>
+
               <button
                 onClick={() => setIsLaunchOpen(true)}
                 className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm transition-colors"
@@ -415,7 +451,7 @@ function DashboardContent() {
         <div>
           <span>Durable Orchestration: Temporal.io</span>
           <span className="mx-2">·</span>
-          <span>REST API: Spring Boot</span>
+          <span>Cloud Persistence: Firebase Firestore</span>
         </div>
       </footer>
 
@@ -452,6 +488,22 @@ function DashboardContent() {
         mission={rerouteTargetMission}
         onClose={() => setRerouteTargetMission(null)}
         onSubmit={handleConfirmReroute}
+      />
+
+      {/* Gemini AI Multi-turn Chatbot Drawer */}
+      <GeminiChatbot
+        isOpen={isAIChatOpen}
+        onClose={() => setIsAIChatOpen(false)}
+        onOpenVoiceMode={() => {
+          setIsAIChatOpen(false);
+          setIsVoiceModalOpen(true);
+        }}
+      />
+
+      {/* Gemini Live Voice Radio Modal */}
+      <LiveVoiceModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
       />
     </div>
   );
