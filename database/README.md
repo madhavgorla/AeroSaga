@@ -1,5 +1,5 @@
 # Database — Trishul
 
-Team role sheet proposes MySQL + JPA; confirm with mentor before finalizing. Proposed app DB: `aerosaga`; host port `3307` -> container `3306`. Tables: `drones`, `missions`, `waypoints`, `mission_events`.
+The app uses MySQL + JPA. The app database is `aerosaga`; host port `3307` maps to container port `3306`. Tables: `drones`, `missions`, `waypoints`, `mission_events`.
 
-MySQL stores business records/audit history; Temporal has its own workflow persistence. SQL files in `/docker-entrypoint-initdb.d` run only when the MySQL data directory is first initialized. Use reviewed, versioned migrations (Flyway recommended) for ongoing changes.
+MySQL stores business records and audit history; Temporal has its own workflow persistence. Flyway applies reviewed, versioned migrations from `backend/src/main/resources/db/migration` when the backend starts. Hibernate validates the migrated schema without changing it.
