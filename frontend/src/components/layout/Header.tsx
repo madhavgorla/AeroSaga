@@ -1,6 +1,8 @@
 import React from 'react';
-import { Plane, Plus, RefreshCw, Menu, Radio, Sparkles, Mic } from 'lucide-react';
+import type { Drone, Mission } from '../../types';
+import { Plane, Plus, RefreshCw, Menu, Sparkles, Mic } from 'lucide-react';
 import { AuthBar } from '../auth/AuthBar';
+import { GlobalSearchBar } from '../search/GlobalSearchBar';
 
 interface HeaderProps {
   currentTab: string;
@@ -12,6 +14,11 @@ interface HeaderProps {
   isRefreshing: boolean;
   isMockMode: boolean;
   onToggleMobileMenu: () => void;
+  drones: Drone[];
+  missions: Mission[];
+  onSelectDrone: (droneId: string) => void;
+  onSelectMission: (missionId: string) => void;
+  onFilterStatus?: (status: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,6 +31,11 @@ export const Header: React.FC<HeaderProps> = ({
   isRefreshing,
   isMockMode,
   onToggleMobileMenu,
+  drones,
+  missions,
+  onSelectDrone,
+  onSelectMission,
+  onFilterStatus,
 }) => {
   const navItems = [
     { id: 'overview', label: 'Fleet Command' },
@@ -34,8 +46,8 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#080d1a]/95 backdrop-blur-md border-b border-slate-800/80 px-4 md:px-6 py-3 flex items-center justify-between gap-6">
-      {/* Zone 1: Single text element wordmark / brand */}
+    <header className="sticky top-0 z-40 w-full bg-[#080d1a]/95 backdrop-blur-md border-b border-slate-800/80 px-4 md:px-6 py-2.5 flex items-center justify-between gap-4">
+      {/* Zone 1: Wordmark & Mobile burger */}
       <div className="flex items-center gap-3 shrink-0">
         <button
           onClick={onToggleMobileMenu}
@@ -55,13 +67,21 @@ export const Header: React.FC<HeaderProps> = ({
             AEROSAGA
           </span>
         </button>
-        <span className="hidden xl:inline text-xs text-slate-500 font-mono-numbers">
-          · MISSION CONTROL
-        </span>
       </div>
 
-      {/* Zone 2: 4–5 concise single-line text navigation links */}
-      <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-400 overflow-x-auto">
+      {/* Global Search Bar (Finding drones by ID or missions by status) */}
+      <div className="flex-1 max-w-sm lg:max-w-md mx-2">
+        <GlobalSearchBar
+          drones={drones}
+          missions={missions}
+          onSelectDrone={onSelectDrone}
+          onSelectMission={onSelectMission}
+          onFilterStatus={onFilterStatus}
+        />
+      </div>
+
+      {/* Zone 2: Navigation Links */}
+      <nav className="hidden xl:flex items-center gap-5 text-xs font-medium text-slate-400">
         {navItems.map((item) => {
           const isActive = currentTab === item.id;
           return (
@@ -82,25 +102,25 @@ export const Header: React.FC<HeaderProps> = ({
       </nav>
 
       {/* Zone 3: AI Copilot, Live Voice, Auth, and Primary CTA */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Gemini AI Copilot button */}
         <button
           onClick={onOpenAIChat}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-sky-950 to-indigo-950 border border-sky-600/50 text-sky-200 hover:border-sky-400 transition-colors shadow-sm"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-sky-950 to-indigo-950 border border-sky-600/50 text-sky-200 hover:border-sky-400 transition-colors shadow-sm"
           title="Open Gemini AI Mission Copilot"
         >
           <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-          <span className="hidden sm:inline">AI Copilot</span>
+          <span className="hidden lg:inline">AI Copilot</span>
         </button>
 
         {/* Live Voice Audio button */}
         <button
           onClick={onOpenVoiceModal}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white hover:border-sky-500 transition-colors"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white hover:border-sky-500 transition-colors"
           title="Open Gemini Live Voice Radio Channel"
         >
           <Mic className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="hidden sm:inline">Voice Radio</span>
+          <span className="hidden lg:inline">Voice Radio</span>
         </button>
 
         {/* Firebase Authentication */}
@@ -125,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 active:bg-sky-700 rounded-lg shadow-sm transition-colors whitespace-nowrap shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Launch Mission</span>
+          <span className="hidden md:inline">Launch Mission</span>
         </button>
       </div>
     </header>

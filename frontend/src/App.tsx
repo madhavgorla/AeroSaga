@@ -222,7 +222,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#080d1a] text-slate-100 flex flex-col">
-      {/* Top Bar Contract (Strict 3-zone Header with AI and Auth) */}
+      {/* Top Bar Contract with Global Search */}
       <Header
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -233,6 +233,22 @@ function DashboardContent() {
         isRefreshing={refreshing}
         isMockMode={isMockMode}
         onToggleMobileMenu={() => setMobileMenuOpen(true)}
+        drones={drones}
+        missions={missions}
+        onSelectDrone={(droneId) => {
+          setCurrentTab('drones');
+          showToast({
+            type: 'info',
+            title: `Navigated to ${droneId}`,
+            description: `Inspecting telemetry and Temporal signal controls for ${droneId}.`,
+          });
+        }}
+        onSelectMission={(missionId) => {
+          setSelectedMissionId(missionId);
+        }}
+        onFilterStatus={() => {
+          setCurrentTab('missions');
+        }}
       />
 
       <div className="flex-1 flex">
