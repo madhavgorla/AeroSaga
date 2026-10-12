@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { auth, loginWithGoogle, logoutUser, testFirestoreConnection } from '../../services/firebase';
+import { auth, loginWithGoogle, logoutUser } from '../../services/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { LogIn, LogOut, User as UserIcon, Shield, Database } from 'lucide-react';
+import { LogIn, LogOut, User as UserIcon, Shield } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
 export const AuthBar: React.FC = () => {
@@ -10,8 +10,6 @@ export const AuthBar: React.FC = () => {
   const { showToast } = useToast();
 
   useEffect(() => {
-    testFirestoreConnection();
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -25,8 +23,8 @@ export const AuthBar: React.FC = () => {
       const signedInUser = await loginWithGoogle();
       showToast({
         type: 'success',
-        title: 'Authenticated with Google',
-        description: `Welcome back, ${signedInUser.displayName || 'Operator'}! Mission control credentials verified in Firestore.`,
+        title: 'Authenticated as Operator',
+        description: `Welcome back, ${signedInUser.displayName || 'Operator'}! Flight control session authenticated.`,
       });
     } catch (err: any) {
       showToast({
@@ -83,8 +81,8 @@ export const AuthBar: React.FC = () => {
               {user.displayName || 'Flight Controller'}
             </span>
             <span className="text-[9px] text-emerald-400 font-mono-numbers flex items-center gap-1">
-              <Database className="w-2.5 h-2.5" />
-              <span>Firestore Synced</span>
+              <Shield className="w-2.5 h-2.5" />
+              <span>Operator Session</span>
             </span>
           </div>
 

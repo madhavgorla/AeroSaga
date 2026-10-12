@@ -1,30 +1,34 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   signOut as firebaseSignOut,
-  onAuthStateChanged,
+  type Auth,
   type User,
 } from 'firebase/auth';
 import {
   getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  collection,
-  query,
-  getDocs,
-  getDocFromServer,
+  type Firestore,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
 
-// Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+// Default configuration with environment variable support.
+// Does NOT import external root JSON files to prevent breaking standalone frontend CI builds.
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAueqSVUQvQqs74Ikz3ExIodGiS7pxYOAw',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'gen-lang-client-0717841977.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'gen-lang-client-0717841977',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'gen-lang-client-0717841977.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '299326808821',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:299326808821:web:e45ecc22b60b9fd43a5bbc',
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || 'ai-studio-aerosagaautonomo-e15c1d6f-8db5-46bf-94a1-a8bf1f39a1ed',
+};
 
-// CRITICAL: Database ID must be passed to getFirestore as defined in skill
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+// Safe singleton initialization
+const app: FirebaseApp = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+
+export const auth: Auth = getAuth(app);
+export const db: Firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 export enum OperationType {
@@ -64,46 +68,13 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Note: ', JSON.stringify(errInfo));
+  return errInfo;
 }
 
-// Test connection on boot
-export async function testFirestoreConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline.');
-    }
-  }
-}
-
-// Sync user profile upon sign-in
-export async function syncUserProfile(user: User) {
-  const userRef = doc(db, 'users', user.uid);
-  try {
-    await setDoc(
-      userRef,
-      {
-        uid: user.uid,
-        email: user.email || '',
-        displayName: user.displayName || 'Flight Operator',
-        photoURL: user.photoURL || '',
-        role: 'MISSION_CONTROLLER',
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
-  }
-}
-
-// Auth helpers
+// Authentication helpers
 export async function loginWithGoogle(): Promise<User> {
   const result = await signInWithPopup(auth, googleProvider);
-  await syncUserProfile(result.user);
   return result.user;
 }
 

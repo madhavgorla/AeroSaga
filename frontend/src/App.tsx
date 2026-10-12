@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import type { Drone, Mission, Waypoint } from './types';
 import { apiService } from './services/api';
-import { auth, db, handleFirestoreError, OperationType } from './services/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { TacticalMap } from './components/tactical/TacticalMap';
@@ -27,7 +25,9 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
-  Mic,
+  AlertTriangle,
+  Radio,
+  ArrowRight,
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -52,7 +52,7 @@ function DashboardContent() {
   const [isAIChatOpen, setIsAIChatOpen] = useState<boolean>(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
 
-  // Fetch all fleet data
+  // Fetch fleet telemetry from backend
   const loadData = useCallback(
     async (showNotification = false) => {
       setRefreshing(true);
@@ -90,7 +90,7 @@ function DashboardContent() {
     loadData();
   }, [loadData]);
 
-  // Handle Create Mission (with optional Firestore persistence)
+  // Handle Create Mission (strictly through Spring Boot REST API)
   const handleCreateMission = async (data: {
     droneId: string;
     destination: string;
@@ -99,27 +99,10 @@ function DashboardContent() {
     try {
       const created = await apiService.createMission(data);
 
-      // If user is authenticated with Firebase, save record to Firestore
-      if (auth.currentUser) {
-        try {
-          await setDoc(doc(db, 'missions', created.missionId), {
-            missionId: created.missionId,
-            workflowId: created.workflowId,
-            droneId: created.droneId,
-            destination: created.destination,
-            status: created.status,
-            createdAt: created.createdAt,
-            userId: auth.currentUser.uid,
-          });
-        } catch (fsErr) {
-          console.warn('Firestore sync note:', fsErr);
-        }
-      }
-
       showToast({
         type: 'success',
         title: 'Mission Dispatched',
-        description: `Mission ${created.missionId} created. Temporal Workflow ${created.workflowId} running.`,
+        description: `Mission ${created.missionId} created. Temporal Workflow ${created.workflowId} initialized.`,
       });
       await loadData();
       setSelectedMissionId(created.missionId);
@@ -222,7 +205,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#080d1a] text-slate-100 flex flex-col">
-      {/* Top Bar Contract with Global Search */}
+      {/* Top Bar with Global Search and Navigation */}
       <Header
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -250,6 +233,33 @@ function DashboardContent() {
           setCurrentTab('missions');
         }}
       />
+
+      {/* Point 4 Fix: Clear "Mock mode" banner when simulated data is active */}
+      {isMockMode && (
+        <div className="bg-amber-950/80 border-b border-amber-600/60 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong className="font-semibold text-white">MOCK MODE ACTIVE:</strong> Spring
+              Boot REST API (<code className="font-mono text-amber-300">http://localhost:8080</code>) is
+              currently offline or unreachable. Displaying local simulated fleet data.
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                apiService.setForceMock(false);
+                loadData(true);
+              }}
+              className="px-2.5 py-1 rounded bg-amber-900 hover:bg-amber-800 text-white font-medium text-[11px] border border-amber-600/60 transition-colors flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry Live API</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex">
         {/* Navigation Sidebar */}
@@ -285,7 +295,7 @@ function DashboardContent() {
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-200 bg-sky-950/60 border border-sky-700/60 hover:bg-sky-900/60 rounded-lg shadow-sm transition-colors"
               >
                 <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                <span>Ask AI Copilot</span>
+                <span>AI Copilot</span>
               </button>
 
               <button
@@ -423,9 +433,8 @@ function DashboardContent() {
                   <ShieldCheck className="w-4 h-4" />
                   <span>Interactive Temporal Signal Testing</span>
                 </div>
-                Use the buttons below to simulate telemetry disconnects and reconnects. Watch
-                the Spring Boot API receive the signals, notify Temporal, and reflect the durable
-                wait state in the active missions list!
+                Simulate drone disconnection and reconnection signals to verify Temporal's
+                workflow pause and recovery logic. All transitions reflect in real time.
               </div>
 
               <DroneFleetGrid
@@ -467,7 +476,7 @@ function DashboardContent() {
         <div>
           <span>Durable Orchestration: Temporal.io</span>
           <span className="mx-2">·</span>
-          <span>Cloud Persistence: Firebase Firestore</span>
+          <span>REST API: Spring Boot</span>
         </div>
       </footer>
 
