@@ -1,19 +1,534 @@
-import {useEffect,useState} from 'react';
-import {Activity,AlertTriangle,ArrowUpRight,BatteryCharging,CheckCircle2,Clock3,MapPin,Plane,Plus,RadioTower,RefreshCw,ShieldCheck,WifiOff} from 'lucide-react';
-import {getMissions,createMission,abortMission,type Mission} from './api';
-const points=[{latitude:16.5062,longitude:80.6480},{latitude:16.5200,longitude:80.6300}];
-const cls=(s:string)=>['COMPLETED','AVAILABLE'].includes(s)?'green':['SUSPENDED_OFFLINE','FAILED','ABORTED'].includes(s)?'red':['RECOVERING','RETURNING','IN_PROGRESS'].includes(s)?'blue':'amber';
-export default function App(){
- const [missions,setMissions]=useState<Mission[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('Starter dashboard: connect and verify backend endpoints before final demo.'),[drone,setDrone]=useState('DRONE-001'),[destination,setDestination]=useState('Warehouse B'),[busy,setBusy]=useState(false);
- async function refresh(){setLoading(true);setError('');try{setMissions(await getMissions())}catch(e){setError(e instanceof Error?e.message:'Could not load missions')}finally{setLoading(false)}}
- useEffect(()=>{void refresh()},[]);
- async function launch(){setBusy(true);setError('');try{const m=await createMission({droneId:drone,destination,waypoints:points});setNotice(`Mission ${m.missionId} accepted.`);await refresh()}catch(e){setError(e instanceof Error?e.message:'Create failed')}finally{setBusy(false)}}
- async function abort(id:string){setBusy(true);setError('');try{await abortMission(id);setNotice('Abort signal accepted.');await refresh()}catch(e){setError(e instanceof Error?e.message:'Abort failed')}finally{setBusy(false)}}
- const active=missions.filter(m=>['SCHEDULED','IN_PROGRESS','RECOVERING','RETURNING'].includes(m.status)).length,offline=missions.filter(m=>m.status==='SUSPENDED_OFFLINE').length;
- return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brandIcon"><Plane/></div><div><b>AEROSAGA</b><small>MISSION CONTROL</small></div></div><p className="navlabel">OPERATIONS</p><div className="nav active"><Activity/> Fleet overview</div><div className="nav"><MapPin/> Mission routes <small>SOON</small></div><div className="nav"><RadioTower/> Telemetry <small>SOON</small></div><div className="bottom"><ShieldCheck/><b>Durable execution</b><small>Powered by Temporal</small><p>TEAM 6 · INFOTACT SOLUTIONS</p></div></aside>
- <main><header><div><span className="eyebrow">DRONE OPERATIONS / OVERVIEW</span><h1>Fleet command center</h1><p>Monitor missions, connectivity and workflow recovery.</p></div><button className="refresh" onClick={()=>void refresh()}><RefreshCw size={16}/> Refresh</button></header>
- <section className="stats"><article><label>TOTAL MISSIONS <Activity/></label><strong>{String(missions.length).padStart(2,'0')}</strong><small>Loaded from API</small></article><article><label>ACTIVE WORKFLOWS <RadioTower/></label><strong>{String(active).padStart(2,'0')}</strong><small>In progress / recovery</small></article><article><label>OFFLINE WAITING <WifiOff/></label><strong>{String(offline).padStart(2,'0')}</strong><small>Durable wait state</small></article><article><label>FLEET STATUS <BatteryCharging/></label><strong className="sim">SIMULATED</strong><small>No live hardware connected</small></article></section>
- <section className="columns"><article className="panel"><div className="panelhead"><div><h2>Fleet visualization</h2><p>Illustrative pins only; map provider not integrated yet.</p></div><span className="pill">DEMO MODE</span></div><div className="map"><div className="grid"></div><span className="pin one"><Plane/> DRONE-001</span><span className="pin two"><Plane/> DRONE-002</span><span className="pin three"><Plane/> DRONE-003</span><small>◎ SIMULATED ROUTES · NOT LIVE GPS</small></div><div className="legend">● In flight　 <span>● Available</span>　<b>● Offline</b></div></article>
- <article className="panel"><div className="panelhead"><div><h2>Launch mission</h2><p>Create a simulated delivery workflow.</p></div><Plus/></div><label>DRONE ID<select value={drone} onChange={e=>setDrone(e.target.value)}><option>DRONE-001</option><option>DRONE-002</option><option>DRONE-003</option></select></label><label>DESTINATION<input value={destination} onChange={e=>setDestination(e.target.value)} placeholder="Destination"/></label><div className="route"><b>● Dispatch hub</b><small>16.5062, 80.6480</small><b>● {destination||'Destination'}</b><small>16.5200, 80.6300 · Sample waypoint</small></div><button className="launch" disabled={busy||!destination.trim()} onClick={()=>void launch()}><Plane size={16}/>{busy?'Working…':'Create mission'}<ArrowUpRight size={16}/></button><small className="note"><ShieldCheck size={13}/> Workflow must be durable in Temporal, not browser state.</small></article></section>
- <section className="panel missions"><div className="panelhead"><div><h2>Mission activity</h2><p>Statuses must reflect backend data.</p></div><Clock3/></div>{error&&<div className="alert"><AlertTriangle size={16}/>{error}</div>}{notice&&<div className="notice"><CheckCircle2 size={16}/>{notice}</div>}{loading?<p className="empty">Loading missions…</p>:missions.length===0?<p className="empty">No missions returned. Complete the backend integration to enable this table.</p>:<div className="overflow"><table><thead><tr><th>MISSION</th><th>DRONE</th><th>DESTINATION</th><th>STATUS</th><th>CREATED</th><th>ACTION</th></tr></thead><tbody>{missions.map(m=><tr key={m.missionId}><td>{m.missionId}<small>{m.workflowId}</small></td><td>{m.droneId}</td><td>{m.destination}</td><td><span className={'status '+cls(m.status)}>{m.status.replaceAll('_',' ')}</span></td><td>{m.createdAt?new Date(m.createdAt).toLocaleString():'—'}</td><td><button disabled={busy||['COMPLETED','ABORTED','FAILED'].includes(m.status)} onClick={()=>void abort(m.missionId)}>Abort</button></td></tr>)}</tbody></table></div>}</section><footer><span>Development starter · API-connected status</span><span>Temporal history is the durability source of truth.</span></footer></main></div>
+import React, { useEffect, useState, useCallback } from 'react';
+import type { Drone, Mission, Waypoint } from './types';
+import { apiService } from './services/api';
+import { auth, db, handleFirestoreError, OperationType } from './services/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { Header } from './components/layout/Header';
+import { Sidebar } from './components/layout/Sidebar';
+import { TacticalMap } from './components/tactical/TacticalMap';
+import { MissionsTable } from './components/missions/MissionsTable';
+import { DroneFleetGrid } from './components/drones/DroneFleetGrid';
+import { MissionDetailDrawer } from './components/missions/MissionDetailDrawer';
+import { LaunchMissionModal } from './components/missions/LaunchMissionModal';
+import { AbortModal } from './components/missions/AbortModal';
+import { RerouteMissionModal } from './components/missions/RerouteMissionModal';
+import { AnalyticsView } from './components/analytics/AnalyticsView';
+import { DiagnosticsPanel } from './components/diagnostics/DiagnosticsPanel';
+import { GeminiChatbot } from './components/ai/GeminiChatbot';
+import { LiveVoiceModal } from './components/ai/LiveVoiceModal';
+import { ToastProvider, useToast } from './components/ui/Toast';
+import {
+  Activity,
+  RadioTower,
+  WifiOff,
+  BatteryCharging,
+  Plane,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Mic,
+} from 'lucide-react';
+
+function DashboardContent() {
+  const { showToast } = useToast();
+  const [currentTab, setCurrentTab] = useState<string>('overview');
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [drones, setDrones] = useState<Drone[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [isMockMode, setIsMockMode] = useState<boolean>(apiService.isUsingMock());
+
+  // Navigation drawer
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+
+  // Modals & Drawers state
+  const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
+  const [isLaunchOpen, setIsLaunchOpen] = useState<boolean>(false);
+  const [abortTargetId, setAbortTargetId] = useState<string | null>(null);
+  const [rerouteTargetMission, setRerouteTargetMission] = useState<Mission | null>(null);
+
+  // AI & Voice Modals state
+  const [isAIChatOpen, setIsAIChatOpen] = useState<boolean>(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
+
+  // Fetch all fleet data
+  const loadData = useCallback(
+    async (showNotification = false) => {
+      setRefreshing(true);
+      try {
+        const [missionsData, dronesData] = await Promise.all([
+          apiService.getMissions(),
+          apiService.getDrones(),
+        ]);
+        setMissions(missionsData);
+        setDrones(dronesData);
+        setIsMockMode(apiService.isUsingMock());
+
+        if (showNotification) {
+          showToast({
+            type: 'info',
+            title: 'Fleet telemetry synced',
+            description: `${missionsData.length} missions and ${dronesData.length} drones loaded.`,
+          });
+        }
+      } catch (err) {
+        showToast({
+          type: 'error',
+          title: 'Sync failed',
+          description: err instanceof Error ? err.message : 'Could not fetch fleet telemetry',
+        });
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [showToast]
+  );
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Handle Create Mission (with optional Firestore persistence)
+  const handleCreateMission = async (data: {
+    droneId: string;
+    destination: string;
+    waypoints: Waypoint[];
+  }) => {
+    try {
+      const created = await apiService.createMission(data);
+
+      // If user is authenticated with Firebase, save record to Firestore
+      if (auth.currentUser) {
+        try {
+          await setDoc(doc(db, 'missions', created.missionId), {
+            missionId: created.missionId,
+            workflowId: created.workflowId,
+            droneId: created.droneId,
+            destination: created.destination,
+            status: created.status,
+            createdAt: created.createdAt,
+            userId: auth.currentUser.uid,
+          });
+        } catch (fsErr) {
+          console.warn('Firestore sync note:', fsErr);
+        }
+      }
+
+      showToast({
+        type: 'success',
+        title: 'Mission Dispatched',
+        description: `Mission ${created.missionId} created. Temporal Workflow ${created.workflowId} running.`,
+      });
+      await loadData();
+      setSelectedMissionId(created.missionId);
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Launch Failed',
+        description: err instanceof Error ? err.message : 'Error creating mission',
+      });
+      throw err;
+    }
+  };
+
+  // Handle Abort Mission
+  const handleConfirmAbort = async (missionId: string) => {
+    try {
+      await apiService.abortMission(missionId);
+      showToast({
+        type: 'warning',
+        title: 'Abort Signal Accepted',
+        description: `Temporal workflow for ${missionId} instructed to initiate controlled landing.`,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Abort Signal Failed',
+        description: err instanceof Error ? err.message : 'Error aborting mission',
+      });
+    }
+  };
+
+  // Handle Reroute Mission
+  const handleConfirmReroute = async (missionId: string, waypoints: Waypoint[]) => {
+    try {
+      await apiService.rerouteMission(missionId, waypoints);
+      showToast({
+        type: 'success',
+        title: 'Reroute Signal Transmitted',
+        description: `Replacement flight path delivered to Temporal workflow ${missionId}.`,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Reroute Failed',
+        description: err instanceof Error ? err.message : 'Error rerouting mission',
+      });
+    }
+  };
+
+  // Handle Drone Signal Simulation (Offline)
+  const handleSignalOffline = async (droneId: string) => {
+    try {
+      const res = await apiService.signalDroneOffline(droneId);
+      showToast({
+        type: 'warning',
+        title: 'Temporal Signal Sent: Drone Offline',
+        description: res.message,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Signal Failed',
+        description: err instanceof Error ? err.message : 'Could not signal offline',
+      });
+    }
+  };
+
+  // Handle Drone Signal Simulation (Reconnected)
+  const handleSignalReconnect = async (droneId: string) => {
+    try {
+      const res = await apiService.signalDroneReconnected(droneId);
+      showToast({
+        type: 'success',
+        title: 'Temporal Signal Sent: Drone Reconnected',
+        description: res.message,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Signal Failed',
+        description: err instanceof Error ? err.message : 'Could not signal reconnect',
+      });
+    }
+  };
+
+  // Statistics
+  const activeWorkflowsCount = missions.filter((m) =>
+    ['SCHEDULED', 'IN_PROGRESS', 'RECOVERING', 'RETURNING'].includes(m.status)
+  ).length;
+
+  const offlineWaitingCount = missions.filter(
+    (m) => m.status === 'SUSPENDED_OFFLINE'
+  ).length;
+
+  const availableDronesCount = drones.filter((d) => d.status === 'AVAILABLE').length;
+
+  return (
+    <div className="min-h-screen bg-[#080d1a] text-slate-100 flex flex-col">
+      {/* Top Bar Contract with Global Search */}
+      <Header
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+        onOpenLaunchModal={() => setIsLaunchOpen(true)}
+        onOpenAIChat={() => setIsAIChatOpen(true)}
+        onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+        onRefresh={() => loadData(true)}
+        isRefreshing={refreshing}
+        isMockMode={isMockMode}
+        onToggleMobileMenu={() => setMobileMenuOpen(true)}
+        drones={drones}
+        missions={missions}
+        onSelectDrone={(droneId) => {
+          setCurrentTab('drones');
+          showToast({
+            type: 'info',
+            title: `Navigated to ${droneId}`,
+            description: `Inspecting telemetry and Temporal signal controls for ${droneId}.`,
+          });
+        }}
+        onSelectMission={(missionId) => {
+          setSelectedMissionId(missionId);
+        }}
+        onFilterStatus={() => {
+          setCurrentTab('missions');
+        }}
+      />
+
+      <div className="flex-1 flex">
+        {/* Navigation Sidebar */}
+        <Sidebar
+          currentTab={currentTab}
+          onTabChange={setCurrentTab}
+          isOpenMobile={mobileMenuOpen}
+          onCloseMobile={() => setMobileMenuOpen(false)}
+          activeCount={activeWorkflowsCount}
+          offlineCount={offlineWaitingCount}
+        />
+
+        {/* Main Content Viewport */}
+        <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+          {/* Breadcrumb & Tab Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+            <div>
+              <div className="text-[11px] font-mono-numbers text-slate-400 uppercase tracking-wider mb-1">
+                AEROSAGA · AUTONOMOUS DRONE MISSION CONTROL
+              </div>
+              <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+                {currentTab === 'overview' && 'Fleet Operations Command'}
+                {currentTab === 'missions' && 'Mission Explorer & Timeline'}
+                {currentTab === 'drones' && 'Drone Fleet & Telemetry Signals'}
+                {currentTab === 'analytics' && 'Operational Analytics & KPIs'}
+                {currentTab === 'diagnostics' && 'API Integration & Health'}
+              </h1>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAIChatOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-200 bg-sky-950/60 border border-sky-700/60 hover:bg-sky-900/60 rounded-lg shadow-sm transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                <span>Ask AI Copilot</span>
+              </button>
+
+              <button
+                onClick={() => setIsLaunchOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Delivery Mission</span>
+              </button>
+            </div>
+          </div>
+
+          {/* KPI Summary Cards Bar */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
+                <span>TOTAL MISSIONS</span>
+                <Activity className="w-4 h-4 text-sky-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono-numbers text-white">
+                {String(missions.length).padStart(2, '0')}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
+                Loaded via REST API
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
+                <span>ACTIVE WORKFLOWS</span>
+                <RadioTower className="w-4 h-4 text-sky-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono-numbers text-sky-400">
+                {String(activeWorkflowsCount).padStart(2, '0')}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
+                Temporal durable state
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
+                <span>OFFLINE WAITING</span>
+                <WifiOff className="w-4 h-4 text-rose-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono-numbers text-rose-400">
+                {String(offlineWaitingCount).padStart(2, '0')}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
+                Suspended pending reconnect
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
+                <span>AVAILABLE DRONES</span>
+                <BatteryCharging className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono-numbers text-emerald-400">
+                {String(availableDronesCount).padStart(2, '0')} / {drones.length}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
+                Ready for dispatch
+              </div>
+            </div>
+          </div>
+
+          {/* Tab 1: Overview (Fleet Command) */}
+          {currentTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Tactical Airspace Map */}
+              <div>
+                <TacticalMap
+                  drones={drones}
+                  missions={missions}
+                  onSelectMission={(id) => setSelectedMissionId(id)}
+                />
+              </div>
+
+              {/* Drones Quick Signal Bar */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                    <Plane className="w-4 h-4 text-sky-400" />
+                    <span>Drone Fleet & Durable Signal Triggers</span>
+                  </h2>
+                  <span className="text-[11px] font-mono-numbers text-slate-400">
+                    Test Temporal offline/reconnect recovery
+                  </span>
+                </div>
+                <DroneFleetGrid
+                  drones={drones}
+                  onSignalOffline={handleSignalOffline}
+                  onSignalReconnect={handleSignalReconnect}
+                  onSelectMission={(id) => setSelectedMissionId(id)}
+                />
+              </div>
+
+              {/* Recent Missions Table */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-slate-200">
+                    Recent Autonomous Missions
+                  </h2>
+                </div>
+                <MissionsTable
+                  missions={missions}
+                  onSelectMission={(id) => setSelectedMissionId(id)}
+                  onAbortMission={(id) => setAbortTargetId(id)}
+                  onRerouteMission={(m) => setRerouteTargetMission(m)}
+                  isBusy={refreshing}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Mission Explorer */}
+          {currentTab === 'missions' && (
+            <div className="space-y-4">
+              <MissionsTable
+                missions={missions}
+                onSelectMission={(id) => setSelectedMissionId(id)}
+                onAbortMission={(id) => setAbortTargetId(id)}
+                onRerouteMission={(m) => setRerouteTargetMission(m)}
+                isBusy={refreshing}
+              />
+            </div>
+          )}
+
+          {/* Tab 3: Drone Telemetry */}
+          {currentTab === 'drones' && (
+            <div className="space-y-6">
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300">
+                <div className="flex items-center gap-2 text-sky-400 font-semibold mb-1">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Interactive Temporal Signal Testing</span>
+                </div>
+                Use the buttons below to simulate telemetry disconnects and reconnects. Watch
+                the Spring Boot API receive the signals, notify Temporal, and reflect the durable
+                wait state in the active missions list!
+              </div>
+
+              <DroneFleetGrid
+                drones={drones}
+                onSignalOffline={handleSignalOffline}
+                onSignalReconnect={handleSignalReconnect}
+                onSelectMission={(id) => setSelectedMissionId(id)}
+              />
+            </div>
+          )}
+
+          {/* Tab 4: Analytics */}
+          {currentTab === 'analytics' && (
+            <AnalyticsView missions={missions} drones={drones} />
+          )}
+
+          {/* Tab 5: Diagnostics & Backend Integration */}
+          {currentTab === 'diagnostics' && (
+            <DiagnosticsPanel
+              isMockMode={isMockMode}
+              onToggleMockMode={(mock) => {
+                apiService.setForceMock(mock);
+                setIsMockMode(mock);
+                loadData(true);
+              }}
+              onRefresh={() => loadData(true)}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800/80 bg-[#060a14] px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 font-mono-numbers">
+        <div className="flex items-center gap-2">
+          <span>AeroSaga Autonomous Drone Mission Control</span>
+          <span>·</span>
+          <span>Team 6 (Infotact Solutions)</span>
+        </div>
+        <div>
+          <span>Durable Orchestration: Temporal.io</span>
+          <span className="mx-2">·</span>
+          <span>Cloud Persistence: Firebase Firestore</span>
+        </div>
+      </footer>
+
+      {/* Modals & Drawers */}
+      <LaunchMissionModal
+        isOpen={isLaunchOpen}
+        onClose={() => setIsLaunchOpen(false)}
+        drones={drones}
+        onSubmit={handleCreateMission}
+      />
+
+      <MissionDetailDrawer
+        missionId={selectedMissionId}
+        onClose={() => setSelectedMissionId(null)}
+        onAbort={(id) => {
+          setSelectedMissionId(null);
+          setAbortTargetId(id);
+        }}
+        onReroute={(m) => {
+          setSelectedMissionId(null);
+          setRerouteTargetMission(m);
+        }}
+      />
+
+      <AbortModal
+        isOpen={!!abortTargetId}
+        missionId={abortTargetId}
+        onClose={() => setAbortTargetId(null)}
+        onConfirm={handleConfirmAbort}
+      />
+
+      <RerouteMissionModal
+        isOpen={!!rerouteTargetMission}
+        mission={rerouteTargetMission}
+        onClose={() => setRerouteTargetMission(null)}
+        onSubmit={handleConfirmReroute}
+      />
+
+      {/* Gemini AI Multi-turn Chatbot Drawer */}
+      <GeminiChatbot
+        isOpen={isAIChatOpen}
+        onClose={() => setIsAIChatOpen(false)}
+        onOpenVoiceMode={() => {
+          setIsAIChatOpen(false);
+          setIsVoiceModalOpen(true);
+        }}
+      />
+
+      {/* Gemini Live Voice Radio Modal */}
+      <LiveVoiceModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+      />
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <DashboardContent />
+    </ToastProvider>
+  );
 }
