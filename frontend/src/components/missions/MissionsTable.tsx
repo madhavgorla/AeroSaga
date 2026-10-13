@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  Play,
 } from 'lucide-react';
 
 interface MissionsTableProps {
@@ -18,6 +19,7 @@ interface MissionsTableProps {
   onSelectMission: (missionId: string) => void;
   onAbortMission: (missionId: string) => void;
   onRerouteMission: (mission: Mission) => void;
+  onOpenReplay?: (mission: Mission) => void;
   isBusy: boolean;
 }
 
@@ -219,6 +221,16 @@ export const MissionsTable: React.FC<MissionsTableProps> = ({
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
+
+                        {onOpenReplay && (
+                          <button
+                            onClick={() => onOpenReplay(m)}
+                            className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-slate-800 rounded transition-colors"
+                            title="Open Flight Replay & Telemetry Blackbox"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                          </button>
+                        )}
 
                         {canReroute && (
                           <button

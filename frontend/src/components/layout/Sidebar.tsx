@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   X,
   Compass,
+  GitBranch,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,6 +42,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'missions',
           label: 'Mission Explorer',
           icon: <Layers className="w-4 h-4" />,
+        },
+        {
+          id: 'workflow',
+          label: 'Workflow Inspector',
+          icon: <GitBranch className="w-4 h-4" />,
         },
         {
           id: 'drones',

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { Drone, Mission } from '../../types';
-import { Plane, MapPin, Radio, ShieldAlert } from 'lucide-react';
+import type { Drone, Mission, NoFlyZone } from '../../types';
+import { Plane, MapPin, Radio, ShieldAlert, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 interface TacticalMapProps {
   drones: Drone[];
@@ -8,6 +8,42 @@ interface TacticalMapProps {
   onSelectMission?: (missionId: string) => void;
   onSelectDrone?: (droneId: string) => void;
 }
+
+const DEFAULT_NO_FLY_ZONES: NoFlyZone[] = [
+  {
+    id: 'NFZ-01',
+    name: 'Metro Airfield Approach Corridor',
+    type: 'AIRPORT_RESTRICTION',
+    center: { latitude: 16.528, longitude: 80.649 },
+    radiusMeters: 650,
+    altitudeCeilingMeters: 0,
+    severity: 'PROHIBITED',
+    active: true,
+    description: 'FAA/DGCA Class C Restricted Airspace. Zero unauthorized drone clearance.',
+  },
+  {
+    id: 'NFZ-02',
+    name: 'Krishna River High-Voltage Transmission Corridor',
+    type: 'POWER_GRID',
+    center: { latitude: 16.501, longitude: 80.627 },
+    radiusMeters: 450,
+    altitudeCeilingMeters: 80,
+    severity: 'WARNING',
+    active: true,
+    description: 'High-voltage electromagnetic interference danger. Min altitude clearance required.',
+  },
+  {
+    id: 'NFZ-03',
+    name: 'Trauma Care Hospital Helipad Buffer',
+    type: 'HOSPITAL_HELIPAD',
+    center: { latitude: 16.517, longitude: 80.626 },
+    radiusMeters: 380,
+    altitudeCeilingMeters: 100,
+    severity: 'RESTRICTED',
+    active: true,
+    description: 'Emergency air ambulance flight path. Active 24/7 priority buffer.',
+  },
+];
 
 export const TacticalMap: React.FC<TacticalMapProps> = ({
   drones,
@@ -17,6 +53,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
 }) => {
   const [hoveredEntity, setHoveredEntity] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'in_flight' | 'offline'>('all');
+  const [showNoFlyZones, setShowNoFlyZones] = useState<boolean>(true);
 
   // Center coordinate: Dispatch Hub Alpha (16.5062, 80.6480)
   const centerLat = 16.514;
@@ -43,51 +80,68 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
   });
 
   return (
-    <div className="relative w-full h-[380px] lg:h-[440px] bg-[#060a14] rounded-xl border border-slate-800 overflow-hidden flex flex-col">
+    <div className="relative w-full h-[400px] lg:h-[460px] bg-[#060a14] rounded-xl border border-slate-800 overflow-hidden flex flex-col">
       {/* Map Header & Controls */}
-      <div className="p-3.5 border-b border-slate-800/80 bg-[#070d1a]/80 backdrop-blur-sm flex items-center justify-between z-20">
+      <div className="p-3.5 border-b border-slate-800/80 bg-[#070d1a]/80 backdrop-blur-sm flex flex-wrap items-center justify-between gap-3 z-20">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-sky-400" />
           <h3 className="text-xs font-semibold text-slate-200">
-            Tactical Flight Airspace
+            Tactical Flight Airspace & Corridors
           </h3>
           <span className="text-[11px] font-mono-numbers text-slate-500 hidden sm:inline">
             HUB ALPHA (16.5062°N, 80.6480°E)
           </span>
         </div>
 
-        {/* Filter controls */}
-        <div className="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-lg border border-slate-800">
+        {/* Toolbar: NFZ Toggle & Drone Filter controls */}
+        <div className="flex items-center gap-2">
+          {/* No-Fly Zone Toggle Button */}
           <button
-            onClick={() => setFilter('all')}
-            className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              filter === 'all'
-                ? 'bg-sky-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setShowNoFlyZones(!showNoFlyZones)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors ${
+              showNoFlyZones
+                ? 'bg-rose-950/70 border-rose-600/60 text-rose-300'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
             }`}
+            title="Toggle Restricted Airspace & No-Fly Zones"
           >
-            All Drones ({drones.length})
+            <AlertTriangle className="w-3 h-3 text-rose-400" />
+            <span>No-Fly Zones {showNoFlyZones ? 'ON' : 'OFF'}</span>
           </button>
-          <button
-            onClick={() => setFilter('in_flight')}
-            className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              filter === 'in_flight'
-                ? 'bg-sky-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            In Flight
-          </button>
-          <button
-            onClick={() => setFilter('offline')}
-            className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              filter === 'offline'
-                ? 'bg-rose-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Offline
-          </button>
+
+          {/* Filter tabs */}
+          <div className="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-lg border border-slate-800">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                filter === 'all'
+                  ? 'bg-sky-600 text-white font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              All ({drones.length})
+            </button>
+            <button
+              onClick={() => setFilter('in_flight')}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                filter === 'in_flight'
+                  ? 'bg-sky-600 text-white font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              In Flight
+            </button>
+            <button
+              onClick={() => setFilter('offline')}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                filter === 'offline'
+                  ? 'bg-rose-600 text-white font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Offline
+            </button>
+          </div>
         </div>
       </div>
 
@@ -104,7 +158,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           <div className="h-full w-[1px] bg-sky-500/15 absolute" />
         </div>
 
-        {/* SVG Waypoint Lines & Flight Corridors */}
+        {/* SVG Waypoint Lines, Flight Corridors & No-Fly Zones */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
           <defs>
             <linearGradient id="corridor-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -114,9 +168,54 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
             <pattern id="grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
               <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" strokeWidth="0.5" strokeOpacity="0.4" />
             </pattern>
+            {/* Danger stripe pattern for restricted No-Fly Zones */}
+            <pattern id="danger-stripes" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="10" stroke="#f43f5e" strokeWidth="2" strokeOpacity="0.3" />
+            </pattern>
+            <pattern id="warning-stripes" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="10" stroke="#f59e0b" strokeWidth="2" strokeOpacity="0.25" />
+            </pattern>
           </defs>
 
           <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+
+          {/* Render No-Fly Zones when toggled */}
+          {showNoFlyZones &&
+            DEFAULT_NO_FLY_ZONES.map((zone) => {
+              const pos = project(zone.center.latitude, zone.center.longitude);
+              // Radius in percent roughly ~ 7% to 10%
+              const rx = zone.id === 'NFZ-01' ? 9.5 : zone.id === 'NFZ-02' ? 8 : 7;
+              const isProhibited = zone.severity === 'PROHIBITED';
+
+              return (
+                <g key={zone.id}>
+                  {/* Danger circle fill */}
+                  <circle
+                    cx={`${pos.x}%`}
+                    cy={`${pos.y}%`}
+                    r={`${rx}%`}
+                    fill={isProhibited ? 'url(#danger-stripes)' : 'url(#warning-stripes)'}
+                    stroke={isProhibited ? '#f43f5e' : '#f59e0b'}
+                    strokeWidth="1.5"
+                    strokeDasharray="4 3"
+                    strokeOpacity={0.8}
+                  />
+                  {/* Zone text tag */}
+                  <text
+                    x={`${pos.x}%`}
+                    y={`${pos.y - rx - 1.5}%`}
+                    textAnchor="middle"
+                    fill={isProhibited ? '#fb7185' : '#fcd34d'}
+                    fontSize="9"
+                    fontFamily="monospace"
+                    fontWeight="bold"
+                    opacity={0.85}
+                  >
+                    ⚠️ {zone.id} ({zone.severity})
+                  </text>
+                </g>
+              );
+            })}
 
           {/* Draw active mission paths */}
           {missions
@@ -253,12 +352,12 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
         })}
       </div>
 
-      {/* Map Legend & Disclaimer Footer */}
+      {/* Map Legend & Airspace Safety Footer */}
       <div className="px-4 py-2 bg-[#070d1a] border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-400">
-        <div className="flex items-center gap-4 font-mono-numbers">
+        <div className="flex flex-wrap items-center gap-4 font-mono-numbers">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-            <span>Hub / Base</span>
+            <span>Hub Alpha</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
@@ -266,11 +365,17 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-            <span>Offline (Workflow Suspended)</span>
+            <span>Offline (Suspended)</span>
           </div>
+          {showNoFlyZones && (
+            <div className="flex items-center gap-1.5 text-rose-300">
+              <span className="w-2.5 h-2.5 rounded-sm border border-rose-500 bg-rose-950/60" />
+              <span>Restricted NFZ</span>
+            </div>
+          )}
         </div>
         <div className="text-[10px] text-slate-500 font-mono-numbers">
-          ◎ SIMULATED TACTICAL COORDINATES · NOT LIVE GPS
+          ◎ SIMULATED TACTICAL COORDINATES · AIRSPACE SAFE
         </div>
       </div>
     </div>

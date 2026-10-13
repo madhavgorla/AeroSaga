@@ -12,6 +12,8 @@ import { AbortModal } from './components/missions/AbortModal';
 import { RerouteMissionModal } from './components/missions/RerouteMissionModal';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { DiagnosticsPanel } from './components/diagnostics/DiagnosticsPanel';
+import { WorkflowInspector } from './components/workflow/WorkflowInspector';
+import { FlightReplayModal } from './components/missions/FlightReplayModal';
 import { GeminiChatbot } from './components/ai/GeminiChatbot';
 import { LiveVoiceModal } from './components/ai/LiveVoiceModal';
 import { ToastProvider, useToast } from './components/ui/Toast';
@@ -47,6 +49,7 @@ function DashboardContent() {
   const [isLaunchOpen, setIsLaunchOpen] = useState<boolean>(false);
   const [abortTargetId, setAbortTargetId] = useState<string | null>(null);
   const [rerouteTargetMission, setRerouteTargetMission] = useState<Mission | null>(null);
+  const [replayMission, setReplayMission] = useState<Mission | null>(null);
 
   // AI & Voice Modals state
   const [isAIChatOpen, setIsAIChatOpen] = useState<boolean>(false);
@@ -283,6 +286,7 @@ function DashboardContent() {
               <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
                 {currentTab === 'overview' && 'Fleet Operations Command'}
                 {currentTab === 'missions' && 'Mission Explorer & Timeline'}
+                {currentTab === 'workflow' && 'Temporal Workflow Inspector & State Machine'}
                 {currentTab === 'drones' && 'Drone Fleet & Telemetry Signals'}
                 {currentTab === 'analytics' && 'Operational Analytics & KPIs'}
                 {currentTab === 'diagnostics' && 'API Integration & Health'}
@@ -406,6 +410,7 @@ function DashboardContent() {
                   onSelectMission={(id) => setSelectedMissionId(id)}
                   onAbortMission={(id) => setAbortTargetId(id)}
                   onRerouteMission={(m) => setRerouteTargetMission(m)}
+                  onOpenReplay={(m) => setReplayMission(m)}
                   isBusy={refreshing}
                 />
               </div>
@@ -420,9 +425,23 @@ function DashboardContent() {
                 onSelectMission={(id) => setSelectedMissionId(id)}
                 onAbortMission={(id) => setAbortTargetId(id)}
                 onRerouteMission={(m) => setRerouteTargetMission(m)}
+                onOpenReplay={(m) => setReplayMission(m)}
                 isBusy={refreshing}
               />
             </div>
+          )}
+
+          {/* Tab 3: Workflow Inspector */}
+          {currentTab === 'workflow' && (
+            <WorkflowInspector
+              missions={missions}
+              drones={drones}
+              selectedMissionId={selectedMissionId}
+              onSelectMission={(id) => setSelectedMissionId(id)}
+              onSignalOffline={handleSignalOffline}
+              onSignalReconnect={handleSignalReconnect}
+              onAbortMission={(id) => setAbortTargetId(id)}
+            />
           )}
 
           {/* Tab 3: Drone Telemetry */}
@@ -499,6 +518,15 @@ function DashboardContent() {
           setSelectedMissionId(null);
           setRerouteTargetMission(m);
         }}
+        onOpenReplay={(m) => {
+          setReplayMission(m);
+        }}
+      />
+
+      <FlightReplayModal
+        isOpen={!!replayMission}
+        onClose={() => setReplayMission(null)}
+        mission={replayMission}
       />
 
       <AbortModal

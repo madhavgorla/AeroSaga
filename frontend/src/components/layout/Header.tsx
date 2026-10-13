@@ -40,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   const navItems = [
     { id: 'overview', label: 'Fleet Command' },
     { id: 'missions', label: 'Active Missions' },
+    { id: 'workflow', label: 'Workflow Inspector' },
     { id: 'drones', label: 'Drone Telemetry' },
     { id: 'analytics', label: 'Analytics' },
     { id: 'diagnostics', label: 'API Diagnostics' },

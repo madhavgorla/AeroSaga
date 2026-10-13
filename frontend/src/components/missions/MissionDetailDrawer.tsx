@@ -13,6 +13,7 @@ import {
   AlertOctagon,
   GitBranch,
   RefreshCw,
+  Play,
 } from 'lucide-react';
 
 interface MissionDetailDrawerProps {
@@ -20,6 +21,7 @@ interface MissionDetailDrawerProps {
   onClose: () => void;
   onAbort: (missionId: string) => void;
   onReroute: (mission: Mission) => void;
+  onOpenReplay?: (mission: Mission) => void;
 }
 
 export const MissionDetailDrawer: React.FC<MissionDetailDrawerProps> = ({
@@ -250,6 +252,16 @@ export const MissionDetailDrawer: React.FC<MissionDetailDrawerProps> = ({
         {mission && (
           <div className="p-4 border-t border-slate-800 bg-[#080d1a] flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
+              {onOpenReplay && (
+                <button
+                  onClick={() => onOpenReplay(mission)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-sky-300 hover:text-white bg-sky-950/40 hover:bg-sky-900/60 border border-sky-800/60 rounded-lg transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Blackbox Replay</span>
+                </button>
+              )}
+
               {['IN_PROGRESS', 'SUSPENDED_OFFLINE'].includes(mission.status) && (
                 <button
                   onClick={() => onReroute(mission)}
