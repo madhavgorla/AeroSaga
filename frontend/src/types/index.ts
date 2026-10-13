@@ -85,16 +85,3 @@ export interface ApiConfig {
   isBackendReachable: boolean;
   lastChecked?: string;
 }
-
-export interface NoFlyZone {
-  id: string;
-  name: string;
-  type: 'AIRPORT_RESTRICTION' | 'HOSPITAL_HELIPAD' | 'POWER_GRID' | 'SECURITY_PERIMETER';
-  center: { latitude: number; longitude: number };
-  radiusMeters: number;
-  altitudeCeilingMeters: number;
-  severity: 'RESTRICTED' | 'WARNING' | 'PROHIBITED';
-  active: boolean;
-  description: string;
-}
-
