@@ -35,7 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'overview',
           label: 'Fleet Command',
           icon: <Activity className="w-4 h-4" />,
-          badge: activeCount > 0 ? `${activeCount} Active` : undefined,
+          badge: activeCount > 0 ? `${activeCount}` : undefined,
         },
         {
           id: 'missions',
@@ -47,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Drone Telemetry',
           icon: <RadioTower className="w-4 h-4" />,
           badge: offlineCount > 0 ? `${offlineCount} Offline` : undefined,
-          badgeColor: 'text-rose-400 bg-rose-950/60 border-rose-800/60',
+          badgeColor: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
         },
         {
           id: 'analytics',
@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      title: 'INTEGRATIONS',
+      title: 'SYSTEM',
       items: [
         {
           id: 'diagnostics',
@@ -69,52 +69,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const content = (
-    <div className="flex flex-col h-full bg-[#070b16] border-r border-slate-800/80 p-4">
+    <div className="flex flex-col h-full bg-[#070b16] border-r border-slate-800/60 p-4">
       {/* Brand & Mobile close */}
-      <div className="flex items-center justify-between pb-6 mb-2 border-b border-slate-800/60">
+      <div className="flex items-center justify-between pb-5 mb-2 border-b border-slate-800/60">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
-            <Compass className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="block text-sm font-bold tracking-wider text-white">AEROSAGA</span>
-            <span className="block text-[9px] text-slate-400 font-mono-numbers tracking-wider">
-              DRONE CONTROL
-            </span>
-          </div>
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs font-semibold tracking-wider text-slate-300 font-mono-numbers uppercase">
+            AeroSaga Fleet Core
+          </span>
         </div>
-        {isOpenMobile && (
-          <button
-            onClick={onCloseMobile}
-            className="md:hidden text-slate-400 hover:text-white p-1"
-            aria-label="Close menu"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
+        <button
+          onClick={onCloseMobile}
+          className="md:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Nav Lists */}
-      <div className="flex-1 space-y-6 overflow-y-auto pt-2">
-        {navSections.map((sec) => (
-          <div key={sec.title}>
-            <p className="px-2 text-[10px] font-semibold text-slate-500 font-mono-numbers tracking-wider uppercase mb-2">
-              {sec.title}
-            </p>
-            <div className="space-y-1">
-              {sec.items.map((item) => {
+      {/* Nav List */}
+      <div className="space-y-6 flex-1 py-2">
+        {navSections.map((section) => (
+          <div key={section.title} className="space-y-1">
+            <div className="px-3 text-[10px] font-semibold text-slate-400 font-mono-numbers uppercase tracking-wider mb-2">
+              {section.title}
+            </div>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
                 const isActive = currentTab === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => {
                       onTabChange(item.id);
-                      if (isOpenMobile) onCloseMobile();
+                      onCloseMobile();
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all text-left ${
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                       isActive
-                        ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                        ? 'bg-sky-500/10 text-sky-400 font-semibold border border-sky-500/20 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -123,10 +115,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </span>
                       <span>{item.label}</span>
                     </div>
+
                     {item.badge && (
                       <span
-                        className={`text-[10px] font-mono-numbers px-1.5 py-0.5 rounded border ${
-                          item.badgeColor || 'text-sky-300 bg-sky-950/60 border-sky-800/60'
+                        className={`px-1.5 py-0.5 text-[10px] font-mono-numbers font-semibold rounded-full border ${
+                          item.badgeColor || 'text-sky-400 bg-sky-500/10 border-sky-500/20'
                         }`}
                       >
                         {item.badge}
@@ -140,19 +133,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
-      {/* Temporal Durable Execution Notice */}
-      <div className="mt-auto pt-4 border-t border-slate-800/80">
-        <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400">
-          <div className="flex items-center gap-1.5 text-emerald-400 font-semibold mb-1">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Temporal.io Durable Engine</span>
-          </div>
-          <p className="text-[10px] text-slate-400 leading-relaxed">
-            State transitions orchestrated via distributed workflows with signal recovery.
-          </p>
-          <div className="mt-2 text-[9px] font-mono-numbers text-slate-400">
-            TEAM 6 · INFOTACT SOLUTIONS
-          </div>
+      {/* Airspace Hub Indicator Card */}
+      <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/60 text-xs font-mono-numbers space-y-1.5">
+        <div className="flex items-center justify-between text-slate-400 text-[10px]">
+          <span>HUB ALPHA</span>
+          <span className="text-emerald-400 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            ONLINE
+          </span>
+        </div>
+        <div className="text-[11px] text-slate-300 font-mono-numbers">
+          16.5062°N, 80.6480°E
+        </div>
+        <div className="text-[10px] text-slate-400">
+          Temporal Durable Orchestrator
         </div>
       </div>
     </div>
@@ -160,20 +154,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop static sidebar */}
-      <aside className="hidden md:block w-60 shrink-0 sticky top-[57px] h-[calc(100vh-57px)]">
+      {/* Desktop Sidebar Rail */}
+      <aside className="hidden md:block w-60 shrink-0 sticky top-[53px] h-[calc(100vh-53px)]">
         {content}
       </aside>
 
-      {/* Mobile drawer */}
+      {/* Mobile Drawer Overlay */}
       {isOpenMobile && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
             onClick={onCloseMobile}
-            aria-hidden="true"
           />
-          <div className="relative w-72 max-w-[80vw] h-full shadow-2xl z-10">{content}</div>
+          <div className="relative w-72 max-w-[80vw] h-full z-10 shadow-2xl">
+            {content}
+          </div>
         </div>
       )}
     </>

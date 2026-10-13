@@ -234,30 +234,26 @@ function DashboardContent() {
         }}
       />
 
-      {/* Point 4 Fix: Clear "Mock mode" banner when simulated data is active */}
+      {/* Sleek Mock Mode Banner */}
       {isMockMode && (
-        <div className="bg-amber-950/80 border-b border-amber-600/60 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 md:px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200/90 backdrop-blur-sm">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             <span>
-              <strong className="font-semibold text-white">MOCK MODE ACTIVE:</strong> Spring
-              Boot REST API (<code className="font-mono text-amber-300">http://localhost:8080</code>) is
-              currently offline or unreachable. Displaying local simulated fleet data.
+              <strong className="font-semibold text-amber-100">SIMULATION MODE:</strong> Connected to local fleet telemetry engine (Spring Boot REST API on :8080 offline).
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                apiService.setForceMock(false);
-                loadData(true);
-              }}
-              className="px-2.5 py-1 rounded bg-amber-900 hover:bg-amber-800 text-white font-medium text-[11px] border border-amber-600/60 transition-colors flex items-center gap-1"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Retry Live API</span>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              apiService.setForceMock(false);
+              loadData(true);
+            }}
+            className="px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/30 font-medium text-[11px] transition-colors flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Retry Live API</span>
+          </button>
         </div>
       )}
 
@@ -309,56 +305,68 @@ function DashboardContent() {
           </div>
 
           {/* KPI Summary Cards Bar */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80 hover:border-slate-700/80 transition-all backdrop-blur-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
-                <span>TOTAL MISSIONS</span>
-                <Activity className="w-4 h-4 text-sky-400" />
+                <span className="text-[11px] font-medium tracking-wider">TOTAL MISSIONS</span>
+                <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+                  <Activity className="w-3.5 h-3.5" />
+                </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-mono-numbers text-white">
+              <div className="mt-3 text-2xl lg:text-3xl font-bold font-mono-numbers text-white tracking-tight">
                 {String(missions.length).padStart(2, '0')}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
-                Loaded via REST API
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400 font-mono-numbers">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                <span>REST API Synced</span>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+            <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80 hover:border-sky-800/50 transition-all backdrop-blur-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
-                <span>ACTIVE WORKFLOWS</span>
-                <RadioTower className="w-4 h-4 text-sky-400" />
+                <span className="text-[11px] font-medium tracking-wider">ACTIVE WORKFLOWS</span>
+                <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+                  <RadioTower className="w-3.5 h-3.5" />
+                </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-mono-numbers text-sky-400">
+              <div className="mt-3 text-2xl lg:text-3xl font-bold font-mono-numbers text-sky-400 tracking-tight">
                 {String(activeWorkflowsCount).padStart(2, '0')}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
-                Temporal durable state
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400 font-mono-numbers">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                <span>Temporal Durable State</span>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+            <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80 hover:border-rose-800/50 transition-all backdrop-blur-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
-                <span>OFFLINE WAITING</span>
-                <WifiOff className="w-4 h-4 text-rose-400" />
+                <span className="text-[11px] font-medium tracking-wider">OFFLINE SUSPENDED</span>
+                <div className="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                  <WifiOff className="w-3.5 h-3.5" />
+                </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-mono-numbers text-rose-400">
+              <div className="mt-3 text-2xl lg:text-3xl font-bold font-mono-numbers text-rose-400 tracking-tight">
                 {String(offlineWaitingCount).padStart(2, '0')}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
-                Suspended pending reconnect
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400 font-mono-numbers">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                <span>Pending Reconnection</span>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#0b1325] border border-slate-800">
+            <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80 hover:border-emerald-800/50 transition-all backdrop-blur-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs font-mono-numbers">
-                <span>AVAILABLE DRONES</span>
-                <BatteryCharging className="w-4 h-4 text-emerald-400" />
+                <span className="text-[11px] font-medium tracking-wider">AVAILABLE DRONES</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <BatteryCharging className="w-3.5 h-3.5" />
+                </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-mono-numbers text-emerald-400">
-                {String(availableDronesCount).padStart(2, '0')} / {drones.length}
+              <div className="mt-3 text-2xl lg:text-3xl font-bold font-mono-numbers text-emerald-400 tracking-tight">
+                {String(availableDronesCount).padStart(2, '0')} <span className="text-sm text-slate-500 font-normal">/ {drones.length}</span>
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono-numbers">
-                Ready for dispatch
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400 font-mono-numbers">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>Ready For Dispatch</span>
               </div>
             </div>
           </div>

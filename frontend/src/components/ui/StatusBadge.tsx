@@ -23,70 +23,70 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
     switch (normalized) {
       case 'IN_PROGRESS':
         return {
-          icon: <PlayCircle className="w-3.5 h-3.5 text-sky-400" />,
+          dotColor: 'bg-sky-400',
           label: 'In Progress',
-          classes: 'text-sky-300 bg-sky-950/60 border border-sky-800/60',
+          classes: 'text-sky-300 bg-sky-500/10 border-sky-500/20',
         };
       case 'SCHEDULED':
       case 'CREATED':
         return {
-          icon: <Clock className="w-3.5 h-3.5 text-amber-400" />,
+          dotColor: 'bg-amber-400',
           label: normalized === 'CREATED' ? 'Created' : 'Scheduled',
-          classes: 'text-amber-300 bg-amber-950/60 border border-amber-800/60',
+          classes: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
         };
       case 'SUSPENDED_OFFLINE':
         return {
-          icon: <WifiOff className="w-3.5 h-3.5 text-rose-400" />,
+          dotColor: 'bg-rose-400 animate-pulse',
           label: 'Suspended (Offline)',
-          classes: 'text-rose-300 bg-rose-950/70 border border-rose-800/70',
+          classes: 'text-rose-300 bg-rose-500/10 border-rose-500/20',
         };
       case 'RECOVERING':
         return {
-          icon: <RotateCcw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />,
+          dotColor: 'bg-cyan-400 animate-spin',
           label: 'Recovering Workflow',
-          classes: 'text-cyan-300 bg-cyan-950/60 border border-cyan-800/60',
+          classes: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/20',
         };
       case 'RETURNING':
         return {
-          icon: <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />,
+          dotColor: 'bg-indigo-400',
           label: 'Returning to Base',
-          classes: 'text-indigo-300 bg-indigo-950/60 border border-indigo-800/60',
+          classes: 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20',
         };
       case 'COMPLETED':
         return {
-          icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />,
+          dotColor: 'bg-emerald-400',
           label: 'Completed',
-          classes: 'text-emerald-300 bg-emerald-950/60 border border-emerald-800/60',
+          classes: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
         };
       case 'ABORTED':
         return {
-          icon: <XCircle className="w-3.5 h-3.5 text-slate-400" />,
+          dotColor: 'bg-slate-400',
           label: 'Aborted',
-          classes: 'text-slate-300 bg-slate-900/80 border border-slate-700/60',
+          classes: 'text-slate-300 bg-slate-500/10 border-slate-500/20',
         };
       case 'FAILED':
         return {
-          icon: <AlertTriangle className="w-3.5 h-3.5 text-red-400" />,
+          dotColor: 'bg-red-400',
           label: 'Failed',
-          classes: 'text-red-300 bg-red-950/70 border border-red-800/70',
+          classes: 'text-red-300 bg-red-500/10 border-red-500/20',
         };
       default:
         return {
-          icon: <HelpCircle className="w-3.5 h-3.5 text-slate-400" />,
+          dotColor: 'bg-slate-400',
           label: status,
-          classes: 'text-slate-300 bg-slate-800 border border-slate-700',
+          classes: 'text-slate-300 bg-slate-800 border-slate-700',
         };
     }
   };
 
   const config = getStatusConfig();
-  const pad = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs';
+  const pad = size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs';
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-medium rounded-md font-mono-numbers tracking-wide ${pad} ${config.classes}`}
+      className={`inline-flex items-center gap-1.5 font-medium rounded-full border font-mono-numbers tracking-wide transition-colors ${pad} ${config.classes}`}
     >
-      {config.icon}
+      <span className={`w-1.5 h-1.5 rounded-full ${config.dotColor} shrink-0`} />
       <span>{config.label}</span>
     </span>
   );

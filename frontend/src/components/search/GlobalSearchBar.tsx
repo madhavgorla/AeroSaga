@@ -162,7 +162,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search drones by ID or missions by status..."
-          className="w-full pl-9 pr-16 py-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all font-mono-numbers"
+          className="w-full pl-9 pr-14 py-1.5 bg-slate-900/60 hover:bg-slate-900/80 border border-slate-700/60 rounded-xl text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-500/80 focus:bg-slate-900/90 focus:ring-1 focus:ring-sky-500/40 transition-all font-mono-numbers"
           aria-label="Global search bar"
         />
 
@@ -174,13 +174,13 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
                 setQuery('');
                 inputRef.current?.focus();
               }}
-              className="text-slate-400 hover:text-white p-0.5 rounded"
+              className="text-slate-400 hover:text-white p-0.5 rounded-md hover:bg-slate-800 transition-colors"
               title="Clear search"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <span className="hidden sm:inline-flex items-center text-[10px] text-slate-400 font-mono-numbers px-1.5 py-0.5 rounded border border-slate-700/60 bg-slate-800/80 pointer-events-none">
+            <span className="hidden sm:inline-flex items-center text-[10px] text-slate-400 font-mono-numbers px-1.5 py-0.5 rounded-md border border-slate-700/50 bg-slate-800/60 pointer-events-none">
               ⌘K
             </span>
           )}
@@ -189,7 +189,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
 
       {/* Floating Results Dropdown */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 bg-[#090f20] border border-slate-700/90 rounded-xl shadow-2xl z-50 overflow-hidden max-h-96 flex flex-col backdrop-blur-md">
+        <div className="absolute left-0 right-0 top-full mt-2 bg-[#090f20]/95 border border-slate-700/80 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-96 flex flex-col backdrop-blur-xl">
           {/* If no query, show Quick Status and Drone shortcuts */}
           {!query.trim() && (
             <div className="p-3">

@@ -55,131 +55,148 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
         return (
           <div
             key={drone.droneId}
-            className={`flex flex-col justify-between p-4 rounded-xl border transition-all ${
+            className={`flex flex-col justify-between p-4.5 rounded-2xl border transition-all backdrop-blur-sm ${
               isOffline
-                ? 'bg-rose-950/20 border-rose-900/50 hover:border-rose-700/60'
+                ? 'bg-rose-950/20 border-rose-800/40 hover:border-rose-700/60'
                 : isInFlight
-                ? 'bg-sky-950/20 border-sky-900/50 hover:border-sky-700/60'
-                : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
+                ? 'bg-sky-950/20 border-sky-800/40 hover:border-sky-700/60'
+                : 'bg-slate-900/40 border-slate-800/70 hover:border-slate-700/80'
             }`}
           >
             <div>
-              {/* Header */}
-              <div className="flex items-start justify-between">
+              {/* Card Header */}
+              <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-slate-100 font-mono-numbers">
+                    <span className="text-sm font-bold text-white font-mono-numbers">
                       {drone.droneId}
-                    </h4>
-                    <span
-                      className={`text-[10px] font-mono-numbers px-2 py-0.5 rounded border ${
-                        isOffline
-                          ? 'text-rose-300 bg-rose-950/80 border-rose-800/80'
-                          : isInFlight
-                          ? 'text-sky-300 bg-sky-950/80 border-sky-800/80'
-                          : 'text-emerald-300 bg-emerald-950/80 border-emerald-800/80'
-                      }`}
-                    >
-                      {isOffline ? 'OFFLINE WAITING' : isInFlight ? 'IN FLIGHT' : 'AVAILABLE'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-sans">
+                      · {drone.model}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-slate-400">{drone.model}</p>
+                  <div className="text-[10px] text-slate-400 font-mono-numbers mt-0.5">
+                    {drone.currentLocation.latitude.toFixed(4)}°N,{' '}
+                    {drone.currentLocation.longitude.toFixed(4)}°E
+                  </div>
                 </div>
 
-                <div className="p-2 rounded-lg bg-slate-800/60 text-slate-300">
-                  <Plane className="w-4 h-4" />
+                {/* Status indicator pill */}
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium font-mono-numbers border ${
+                    isOffline
+                      ? 'text-rose-300 bg-rose-500/10 border-rose-500/20'
+                      : isInFlight
+                      ? 'text-sky-300 bg-sky-500/10 border-sky-500/20'
+                      : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isOffline
+                        ? 'bg-rose-400 animate-pulse'
+                        : isInFlight
+                        ? 'bg-sky-400 animate-pulse'
+                        : 'bg-emerald-400'
+                    }`}
+                  />
+                  <span>
+                    {isOffline
+                      ? 'Offline'
+                      : isInFlight
+                      ? 'In Flight'
+                      : 'Available'}
+                  </span>
+                </span>
+              </div>
+
+              {/* Battery Meter */}
+              <div className="mt-4 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-mono-numbers">
+                  <span className="text-slate-400 text-[11px]">BATTERY CAPACITY</span>
+                  <span
+                    className={`font-semibold ${
+                      drone.batteryPercent > 50
+                        ? 'text-emerald-400'
+                        : drone.batteryPercent > 20
+                        ? 'text-amber-400'
+                        : 'text-rose-400'
+                    }`}
+                  >
+                    {drone.batteryPercent}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      drone.batteryPercent > 50
+                        ? 'bg-emerald-500'
+                        : drone.batteryPercent > 20
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${drone.batteryPercent}%` }}
+                  />
                 </div>
               </div>
 
-              {/* Battery & Telemetry metrics */}
-              <div className="mt-4 space-y-2.5">
+              {/* Live Telemetry Meters */}
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-mono-numbers bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/60">
                 <div>
-                  <div className="flex justify-between text-xs font-mono-numbers mb-1">
-                    <span className="text-slate-400 flex items-center gap-1">
-                      {drone.batteryPercent > 20 ? (
-                        <Battery className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <BatteryCharging className="w-3.5 h-3.5 text-amber-400" />
-                      )}
-                      Battery
-                    </span>
-                    <span className="font-semibold text-slate-200">
-                      {drone.batteryPercent}%
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      style={{ width: `${drone.batteryPercent}%` }}
-                      className={`h-full rounded-full ${
-                        drone.batteryPercent > 50
-                          ? 'bg-emerald-400'
-                          : drone.batteryPercent > 20
-                          ? 'bg-amber-400'
-                          : 'bg-rose-500'
-                      }`}
-                    />
-                  </div>
+                  <span className="text-slate-400 block text-[10px]">SPEED</span>
+                  <span className="text-slate-200 font-semibold">
+                    {drone.speedKmh || 0} km/h
+                  </span>
                 </div>
-
-                {/* Telemetry rows */}
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono-numbers text-slate-300 bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">SPEED</span>
-                    <span>{drone.speedKmh || 0} km/h</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">ALTITUDE</span>
-                    <span>{drone.altitudeMeters || 0} m</span>
-                  </div>
-                  <div className="col-span-2 pt-1 border-t border-slate-800/60">
-                    <span className="text-slate-500 block text-[9px]">COORDINATES</span>
-                    <span className="truncate block">
-                      {drone.currentLocation.latitude.toFixed(4)},{' '}
-                      {drone.currentLocation.longitude.toFixed(4)}
-                    </span>
-                  </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">ALTITUDE</span>
+                  <span className="text-slate-200 font-semibold">
+                    {drone.altitudeMeters || 0}m AGL
+                  </span>
                 </div>
-
-                {drone.currentMissionId && (
-                  <div className="pt-1">
-                    <button
-                      onClick={() => onSelectMission && onSelectMission(drone.currentMissionId!)}
-                      className="w-full text-left flex items-center justify-between text-xs text-sky-400 hover:text-sky-300 font-mono-numbers"
-                    >
-                      <span>Active: {drone.currentMissionId}</span>
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {/* Assigned Mission link */}
+              {drone.currentMissionId && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => {
+                      if (onSelectMission && drone.currentMissionId) {
+                        onSelectMission(drone.currentMissionId);
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-lg bg-sky-950/30 border border-sky-800/30 hover:border-sky-600/50 text-xs font-mono-numbers text-sky-300 transition-colors group"
+                  >
+                    <span className="truncate">Mission: {drone.currentMissionId}</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-sky-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Temporal Signal Simulation Actions */}
-            <div className="mt-5 pt-3 border-t border-slate-800/80">
-              <span className="block text-[9px] font-mono-numbers text-slate-500 mb-2 uppercase tracking-wider">
-                Temporal Workflow Signals
-              </span>
-              <div className="grid grid-cols-2 gap-2">
+            {/* Temporal Signal Triggers */}
+            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center gap-2">
+              {!isOffline ? (
                 <button
+                  disabled={isBusy}
                   onClick={() => handleOffline(drone.droneId)}
-                  disabled={isBusy || isOffline}
-                  className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  title="Send POST /api/drones/{id}/offline to pause workflow"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-medium text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 transition-colors disabled:opacity-40"
+                  title="Simulate drone disconnection signal to Temporal workflow"
                 >
-                  <WifiOff className="w-3.5 h-3.5" />
-                  <span>Go Offline</span>
+                  <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+                  <span>{isBusy ? 'Signaling...' : 'Go Offline'}</span>
                 </button>
-
+              ) : (
                 <button
+                  disabled={isBusy}
                   onClick={() => handleReconnect(drone.droneId)}
-                  disabled={isBusy || !isOffline}
-                  className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-sky-950/50 hover:bg-sky-900/60 text-sky-300 border border-sky-800/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  title="Send POST /api/drones/{id}/reconnected to resume recovery"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-medium text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 transition-colors disabled:opacity-40"
+                  title="Signal drone reconnected to resume Temporal workflow"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reconnect</span>
+                  <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{isBusy ? 'Signaling...' : 'Reconnect'}</span>
                 </button>
-              </div>
+              )}
             </div>
           </div>
         );
