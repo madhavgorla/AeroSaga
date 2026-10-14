@@ -12,6 +12,7 @@ import { AbortModal } from './components/missions/AbortModal';
 import { RerouteMissionModal } from './components/missions/RerouteMissionModal';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { DiagnosticsPanel } from './components/diagnostics/DiagnosticsPanel';
+import { DroneCameraFeed } from './components/camera/DroneCameraFeed';
 import { GeminiChatbot } from './components/ai/GeminiChatbot';
 import { LiveVoiceModal } from './components/ai/LiveVoiceModal';
 import { ToastProvider, useToast } from './components/ui/Toast';
@@ -28,6 +29,8 @@ import {
   AlertTriangle,
   Radio,
   ArrowRight,
+  Camera,
+  Layers,
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -51,6 +54,10 @@ function DashboardContent() {
   // AI & Voice Modals state
   const [isAIChatOpen, setIsAIChatOpen] = useState<boolean>(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
+
+  // Optical Camera & Airspace View state
+  const [airspaceView, setAirspaceView] = useState<'radar' | 'camera' | 'split'>('radar');
+  const [selectedCameraDroneId, setSelectedCameraDroneId] = useState<string>('DRONE-001');
 
   // Fetch fleet telemetry from backend
   const loadData = useCallback(
@@ -374,13 +381,93 @@ function DashboardContent() {
           {/* Tab 1: Overview (Fleet Command) */}
           {currentTab === 'overview' && (
             <div className="space-y-6">
-              {/* Tactical Airspace Map */}
-              <div>
-                <TacticalMap
-                  drones={drones}
-                  missions={missions}
-                  onSelectMission={(id) => setSelectedMissionId(id)}
-                />
+              {/* Tactical Airspace Map & Live Optical Gimbal Stream */}
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 p-1 rounded-xl">
+                    <button
+                      onClick={() => setAirspaceView('radar')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        airspaceView === 'radar'
+                          ? 'bg-sky-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Activity className="w-3.5 h-3.5" />
+                      <span>Tactical Radar</span>
+                    </button>
+
+                    <button
+                      onClick={() => setAirspaceView('camera')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        airspaceView === 'camera'
+                          ? 'bg-sky-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Live 4K Camera Feed</span>
+                    </button>
+
+                    <button
+                      onClick={() => setAirspaceView('split')}
+                      className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        airspaceView === 'split'
+                          ? 'bg-sky-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Split Screen</span>
+                    </button>
+                  </div>
+
+                  <div className="text-xs font-mono-numbers text-slate-400 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Real-Time Sensor Link: <strong className="text-sky-400">{selectedCameraDroneId}</strong></span>
+                  </div>
+                </div>
+
+                {airspaceView === 'radar' && (
+                  <TacticalMap
+                    drones={drones}
+                    missions={missions}
+                    onSelectMission={(id) => setSelectedMissionId(id)}
+                    onSelectDrone={(droneId) => {
+                      setSelectedCameraDroneId(droneId);
+                      showToast({
+                        type: 'info',
+                        title: `Camera Target: ${droneId}`,
+                        description: `Live optical gimbal feed linked to ${droneId}.`,
+                      });
+                    }}
+                  />
+                )}
+
+                {airspaceView === 'camera' && (
+                  <DroneCameraFeed
+                    drones={drones}
+                    activeDroneId={selectedCameraDroneId}
+                    onSelectDrone={(droneId) => setSelectedCameraDroneId(droneId)}
+                  />
+                )}
+
+                {airspaceView === 'split' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <TacticalMap
+                      drones={drones}
+                      missions={missions}
+                      onSelectMission={(id) => setSelectedMissionId(id)}
+                      onSelectDrone={(droneId) => setSelectedCameraDroneId(droneId)}
+                    />
+                    <DroneCameraFeed
+                      drones={drones}
+                      activeDroneId={selectedCameraDroneId}
+                      onSelectDrone={(droneId) => setSelectedCameraDroneId(droneId)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Drones Quick Signal Bar */}
