@@ -55,6 +55,20 @@ const INITIAL_DRONES: Drone[] = [
     speedKmh: 0,
     altitudeMeters: 0,
   },
+  {
+    droneId: 'DRONE-005',
+    model: 'AeroSky RapidMedic Alpha',
+    status: 'IN_FLIGHT',
+    batteryPercent: 12, // Critical battery level < 15% to trigger visual warning
+    currentLocation: { latitude: 16.518, longitude: 80.651 },
+    currentMissionId: null,
+    lastHeartbeat: new Date().toISOString(),
+    speedKmh: 46,
+    altitudeMeters: 75,
+    headingDeg: 215,
+    satellitesLocked: 17,
+    signalRssi: -62,
+  },
 ];
 
 const INITIAL_MISSIONS: Mission[] = [
