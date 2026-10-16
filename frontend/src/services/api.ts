@@ -264,7 +264,16 @@ class ApiService {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            return data;
+            return data.map((m: any) => ({
+              missionId: m.missionId,
+              workflowId: m.workflowId || `wf-mission-${m.missionId.toLowerCase()}`,
+              droneId: m.droneId,
+              destination: m.destination,
+              status: m.status,
+              createdAt: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
+              waypoints: Array.isArray(m.waypoints) ? m.waypoints : [],
+              message: m.message || `Temporal Mission ${m.missionId}`,
+            }));
           }
         }
       } catch (err) {
@@ -279,7 +288,17 @@ class ApiService {
       try {
         const res = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(missionId)}`);
         if (res.ok) {
-          return await res.json();
+          const data = await res.json();
+          return {
+            missionId: data.missionId,
+            workflowId: data.workflowId || `wf-mission-${data.missionId.toLowerCase()}`,
+            droneId: data.droneId,
+            destination: data.destination,
+            status: data.status,
+            createdAt: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString(),
+            waypoints: Array.isArray(data.waypoints) ? data.waypoints : [],
+            message: data.message,
+          };
         }
       } catch {
         // Fallback
@@ -289,18 +308,38 @@ class ApiService {
   }
 
   public async createMission(req: MissionRequest): Promise<Mission> {
+    // Sanitize payload strictly to match Spring Boot MissionRequest(droneId, destination, waypoints[latitude, longitude])
+    const backendPayload = {
+      droneId: req.droneId.trim(),
+      destination: req.destination.trim(),
+      waypoints: (req.waypoints || []).map((wp) => ({
+        latitude: Number(Number(wp.latitude).toFixed(7)),
+        longitude: Number(Number(wp.longitude).toFixed(7)),
+      })),
+    };
+
     if (!this.isUsingMock()) {
       try {
         const res = await fetch(`${BASE_URL}/api/missions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
+          body: JSON.stringify(backendPayload),
         });
         if (res.ok) {
-          return await res.json();
+          const data = await res.json();
+          return {
+            missionId: data.missionId,
+            workflowId: data.workflowId || `wf-mission-${data.missionId.toLowerCase()}`,
+            droneId: data.droneId,
+            destination: data.destination,
+            status: data.status,
+            createdAt: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString(),
+            waypoints: req.waypoints,
+            message: data.message || `Dispatched. Temporal Workflow ${data.workflowId} active in AEROSAGA_MISSION_QUEUE.`,
+          };
         }
-      } catch {
-        // Fallback
+      } catch (err) {
+        console.warn('Real Spring Boot backend rejected or unreachable, serving local fallback:', err);
       }
     }
 

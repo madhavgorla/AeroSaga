@@ -146,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           16.5062°N, 80.6480°E
         </div>
         <div className="text-[10px] text-slate-400">
-          Temporal Durable Orchestrator
+          Task Queue: AEROSAGA_MISSION_QUEUE
         </div>
       </div>
     </div>

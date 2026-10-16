@@ -156,10 +156,10 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
         <ShieldCheck className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
         <div className="text-xs text-slate-300 leading-relaxed">
-          <strong className="text-white block mb-0.5">Architectural Boundary Enforcement:</strong>
-          The React client communicates solely via HTTP JSON with Spring Boot endpoints. Long-running
-          orchestration, activity retries, and offline signal suspension are durably recorded in
-          Temporal Server history (`localhost:8233`).
+          <strong className="text-white block mb-0.5">Spring Boot & Temporal Architecture:</strong>
+          The React client communicates solely via HTTP JSON with Spring Boot endpoints (<code className="font-mono text-sky-300">/api/missions</code>, <code className="font-mono text-sky-300">/api/health</code>).
+          Durable workflow orchestration, activity retries, and offline signal gates execute on
+          Temporal Task Queue <code className="font-mono text-sky-300">AEROSAGA_MISSION_QUEUE</code>.
         </div>
       </div>
     </div>

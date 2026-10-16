@@ -85,3 +85,14 @@ export interface ApiConfig {
   isBackendReachable: boolean;
   lastChecked?: string;
 }
+
+export interface BackendMissionResponse {
+  missionId: string;
+  workflowId: string;
+  droneId: string;
+  destination: string;
+  status: MissionStatus;
+  createdAt: string;
+  message?: string;
+}
+
