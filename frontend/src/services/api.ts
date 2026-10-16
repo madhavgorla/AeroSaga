@@ -505,6 +505,66 @@ class ApiService {
     return [...this.drones];
   }
 
+  // --- LIVE LOCATION API ---
+  public async getLiveDroneLocations(): Promise<Drone[]> {
+    try {
+      const res = await fetch('/api/drones/live');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.drones)) {
+          // Sync with internal drones
+          data.drones.forEach((liveD: any) => {
+            const target = this.drones.find((d) => d.droneId === liveD.droneId);
+            if (target) {
+              target.currentLocation = {
+                latitude: liveD.latitude,
+                longitude: liveD.longitude,
+              };
+              target.speedKmh = liveD.speedKmh;
+              target.altitudeMeters = liveD.altitudeMeters;
+              target.headingDeg = liveD.headingDeg;
+              target.batteryPercent = liveD.batteryPercent;
+              target.satellitesLocked = liveD.satellitesLocked;
+              target.signalRssi = liveD.signalRssi;
+              target.lastHeartbeat = liveD.lastUpdated || new Date().toISOString();
+            }
+          });
+          return [...this.drones];
+        }
+      }
+    } catch {
+      // Fallback: client-side simulation step
+    }
+
+    // Client-side simulation step for in-flight drones
+    this.drones.forEach((drone) => {
+      if (drone.status === 'IN_FLIGHT') {
+        const angle = (Date.now() / 15000) * 2 * Math.PI;
+        drone.currentLocation.latitude = +(16.5120 + Math.sin(angle) * 0.008).toFixed(6);
+        drone.currentLocation.longitude = +(80.6420 + Math.cos(angle) * 0.008).toFixed(6);
+        drone.speedKmh = Math.round(52 + Math.sin(Date.now() / 3000) * 6);
+        drone.altitudeMeters = Math.round(115 + Math.cos(Date.now() / 4000) * 10);
+        drone.headingDeg = Math.round(((angle * 180) / Math.PI + 90) % 360);
+        drone.batteryPercent = Math.max(15, +(drone.batteryPercent - 0.01).toFixed(1));
+        drone.lastHeartbeat = new Date().toISOString();
+      }
+    });
+
+    return [...this.drones];
+  }
+
+  public subscribeLiveDroneLocations(
+    callback: (drones: Drone[]) => void,
+    intervalMs: number = 2000
+  ): () => void {
+    const timer = setInterval(async () => {
+      const updated = await this.getLiveDroneLocations();
+      callback(updated);
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }
+
   // --- TEMPORAL SIGNAL SIMULATORS ---
   public async signalDroneOffline(droneId: string): Promise<{ success: boolean; message: string }> {
     if (!this.isUsingMock()) {

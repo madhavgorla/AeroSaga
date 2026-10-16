@@ -71,6 +71,26 @@ export interface Drone {
   lastHeartbeat: string;
   speedKmh?: number;
   altitudeMeters?: number;
+  headingDeg?: number;
+  satellitesLocked?: number;
+  signalRssi?: number;
+}
+
+export interface LiveDroneLocation {
+  droneId: string;
+  model: string;
+  status: 'AVAILABLE' | 'IN_FLIGHT' | 'OFFLINE_WAITING' | 'MAINTENANCE';
+  latitude: number;
+  longitude: number;
+  altitudeMeters: number;
+  speedKmh: number;
+  headingDeg: number;
+  batteryPercent: number;
+  satellitesLocked: number;
+  signalRssi: number;
+  currentMissionId?: string;
+  destination?: string;
+  lastUpdated: string;
 }
 
 export interface HealthResponse {

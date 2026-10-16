@@ -97,6 +97,15 @@ function DashboardContent() {
     loadData();
   }, [loadData]);
 
+  // Real-time live drone location API subscription
+  useEffect(() => {
+    const unsubscribe = apiService.subscribeLiveDroneLocations((updatedDrones) => {
+      setDrones([...updatedDrones]);
+    }, 1500);
+
+    return () => unsubscribe();
+  }, []);
+
   // Handle Create Mission (strictly through Spring Boot REST API)
   const handleCreateMission = async (data: {
     droneId: string;
@@ -538,6 +547,81 @@ function DashboardContent() {
                 onSignalReconnect={handleSignalReconnect}
                 onSelectMission={(id) => setSelectedMissionId(id)}
               />
+
+              {/* Live Fleet GPS Coordinates Monitor Table */}
+              <div className="rounded-2xl border border-slate-800/80 bg-[#090e1a]/90 backdrop-blur-xl overflow-hidden shadow-xl">
+                <div className="p-4 border-b border-slate-800/70 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <h3 className="text-sm font-semibold text-white">
+                      Live Fleet GPS Telemetry Stream (1 Hz)
+                    </h3>
+                  </div>
+                  <span className="text-xs font-mono-numbers text-sky-400 bg-sky-950/60 border border-sky-800/60 px-2 py-0.5 rounded-full">
+                    GET /api/drones/live
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs font-mono-numbers">
+                    <thead>
+                      <tr className="border-b border-slate-800/70 bg-slate-950/40 text-[11px] text-slate-400">
+                        <th className="py-2.5 px-4 font-semibold">DRONE ID</th>
+                        <th className="py-2.5 px-4 font-semibold">LIVE GPS LOCATION</th>
+                        <th className="py-2.5 px-4 font-semibold">ALTITUDE</th>
+                        <th className="py-2.5 px-4 font-semibold">GROUND SPEED</th>
+                        <th className="py-2.5 px-4 font-semibold">HEADING</th>
+                        <th className="py-2.5 px-4 font-semibold">BATTERY</th>
+                        <th className="py-2.5 px-4 font-semibold">SIGNAL RSSI</th>
+                        <th className="py-2.5 px-4 font-semibold text-right">MISSION</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40">
+                      {drones.map((d) => (
+                        <tr key={d.droneId} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3 px-4 font-bold text-white">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                              <span>{d.droneId}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-sans block">{d.model}</span>
+                          </td>
+                          <td className="py-3 px-4 text-sky-300 font-medium">
+                            {d.currentLocation.latitude.toFixed(6)}° N, {d.currentLocation.longitude.toFixed(6)}° E
+                          </td>
+                          <td className="py-3 px-4 text-slate-200">
+                            {d.altitudeMeters || 0} m AGL
+                          </td>
+                          <td className="py-3 px-4 text-slate-200">
+                            {d.speedKmh || 0} km/h
+                          </td>
+                          <td className="py-3 px-4 text-slate-300">
+                            {d.headingDeg || 0}° HDG
+                          </td>
+                          <td className="py-3 px-4 font-semibold text-emerald-400">
+                            {d.batteryPercent}%
+                          </td>
+                          <td className="py-3 px-4 text-slate-300">
+                            {d.signalRssi || -55} dBm ({d.satellitesLocked || 18} sats)
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {d.currentMissionId ? (
+                              <button
+                                onClick={() => setSelectedMissionId(d.currentMissionId!)}
+                                className="px-2 py-1 rounded bg-sky-950/60 text-sky-300 border border-sky-800/60 hover:bg-sky-900/60 transition-colors text-[11px]"
+                              >
+                                {d.currentMissionId}
+                              </button>
+                            ) : (
+                              <span className="text-slate-600">IDLE</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
