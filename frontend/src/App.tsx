@@ -456,6 +456,8 @@ function DashboardContent() {
                       });
                     }}
                     onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
+                    onAbortMission={(id) => setAbortTargetId(id)}
+                    onRerouteMission={(m) => setRerouteTargetMission(m)}
                   />
                 )}
 
@@ -475,6 +477,8 @@ function DashboardContent() {
                       onSelectMission={(id) => setSelectedMissionId(id)}
                       onSelectDrone={(droneId) => setSelectedCameraDroneId(droneId)}
                       onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
+                      onAbortMission={(id) => setAbortTargetId(id)}
+                      onRerouteMission={(m) => setRerouteTargetMission(m)}
                     />
                     <DroneCameraFeed
                       drones={drones}
