@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Drone } from '../../types';
 import { useToast } from '../ui/Toast';
+import { getNearestPlace } from '../../services/landmarks';
 import {
   Battery,
   BatteryCharging,
@@ -18,6 +19,7 @@ import {
   Timer,
   Navigation,
   Gauge,
+  MapPin,
 } from 'lucide-react';
 
 // Dispatch Hub Alpha Coordinates (Home Waypoint)
@@ -121,6 +123,7 @@ interface DroneFleetGridProps {
   onSignalReconnect: (droneId: string) => Promise<void>;
   onSelectMission?: (missionId: string) => void;
   onSimulateBatteryDrain?: (droneId: string, percent: number) => void;
+  onInspectLocation?: (drone: Drone) => void;
 }
 
 export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
@@ -129,6 +132,7 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
   onSignalReconnect,
   onSelectMission,
   onSimulateBatteryDrain,
+  onInspectLocation,
 }) => {
   const { showToast } = useToast();
   const alertedDronesRef = useRef<Set<string>>(new Set());
@@ -244,6 +248,20 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
                     {drone.currentLocation.latitude.toFixed(4)}°N,{' '}
                     {drone.currentLocation.longitude.toFixed(4)}°E
                   </div>
+                  {/* Clickable Place Location Tag */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onInspectLocation) onInspectLocation(drone);
+                    }}
+                    className="mt-1 flex items-center gap-1 text-[11px] font-sans font-medium text-sky-300 hover:text-white transition-colors text-left group/place"
+                    title="Click to view place location details"
+                  >
+                    <MapPin className="w-3 h-3 text-sky-400 shrink-0 group-hover/place:scale-110 transition-transform" />
+                    <span className="truncate max-w-[170px] underline decoration-sky-500/40 underline-offset-2">
+                      {getNearestPlace(drone.currentLocation.latitude, drone.currentLocation.longitude).formattedLocation}
+                    </span>
+                  </button>
                 </div>
 
                 {/* Status indicator pill */}

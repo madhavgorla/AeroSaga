@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Drone, Mission } from '../../types';
+import { AIRSPACE_LANDMARKS, getNearestPlace } from '../../services/landmarks';
 import {
   Plane,
   MapPin,
@@ -11,6 +12,7 @@ import {
   Wifi,
   Satellite,
   Layers,
+  Building2,
 } from 'lucide-react';
 
 interface TacticalMapProps {
@@ -18,6 +20,7 @@ interface TacticalMapProps {
   missions: Mission[];
   onSelectMission?: (missionId: string) => void;
   onSelectDrone?: (droneId: string) => void;
+  onInspectLocation?: (drone: Drone) => void;
 }
 
 export const TacticalMap: React.FC<TacticalMapProps> = ({
@@ -25,11 +28,13 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
   missions,
   onSelectMission,
   onSelectDrone,
+  onInspectLocation,
 }) => {
   const [hoveredEntity, setHoveredEntity] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'in_flight' | 'offline'>('all');
   const [isLiveActive, setIsLiveActive] = useState<boolean>(true);
   const [followDroneId, setFollowDroneId] = useState<string | null>('DRONE-001');
+  const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
 
   // Breadcrumbs history for live flight trail
   const [trailMap, setTrailMap] = useState<Record<string, Array<{ x: number; y: number }>>>({});
@@ -62,7 +67,6 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
         if (d.status === 'IN_FLIGHT') {
           const pt = project(d.currentLocation.latitude, d.currentLocation.longitude);
           const currentTrail = next[d.droneId] || [];
-          // Avoid duplicate points close together
           const last = currentTrail[currentTrail.length - 1];
           if (!last || Math.hypot(last.x - pt.x, last.y - pt.y) > 0.4) {
             next[d.droneId] = [...currentTrail.slice(-16), pt];
@@ -84,6 +88,13 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
     drones.find((d) => d.status === 'IN_FLIGHT') ||
     drones[0];
 
+  const activeTrackingPlace = activeTrackingDrone
+    ? getNearestPlace(
+        activeTrackingDrone.currentLocation.latitude,
+        activeTrackingDrone.currentLocation.longitude
+      )
+    : null;
+
   return (
     <div className="relative w-full h-[400px] lg:h-[460px] bg-[#060a14] rounded-2xl border border-slate-800/80 overflow-hidden flex flex-col shadow-2xl">
       {/* Map Header & Controls */}
@@ -95,12 +106,21 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                 isLiveActive ? 'animate-ping' : 'opacity-40'
               }`}
             />
-            <span>LIVE GPS STREAM</span>
+            <span>LIVE GPS AIRSPACE</span>
           </div>
 
-          <span className="text-[11px] font-mono-numbers text-slate-400 hidden md:inline">
-            HUB ALPHA (16.5062°N, 80.6480°E)
-          </span>
+          <button
+            onClick={() => setShowLandmarks(!showLandmarks)}
+            className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono-numbers transition-colors border ${
+              showLandmarks
+                ? 'bg-sky-950/60 text-sky-300 border-sky-700/50'
+                : 'text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+            title="Toggle nearby landmark pins"
+          >
+            <Building2 className="w-3 h-3" />
+            <span>Landmarks</span>
+          </button>
         </div>
 
         {/* Live Filter & Tracking Controls */}
@@ -257,7 +277,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                     cy={`${pt.y}%`}
                     r="1.5"
                     fill="#38bdf8"
-                    opacity={(idx + 1) / pts.length * 0.6}
+                    opacity={((idx + 1) / pts.length) * 0.6}
                   />
                 ))}
               </g>
@@ -265,21 +285,34 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           })}
         </svg>
 
-        {/* Central Dispatch Hub Marker */}
-        <div
-          style={{ left: `${dispatchHub.x}%`, top: `${dispatchHub.y}%` }}
-          className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer z-10"
-        >
-          <div className="relative">
-            <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950">
-              <MapPin className="w-3 h-3" />
-            </div>
-            <div className="absolute -inset-1 rounded-full border border-emerald-500/30 animate-ping pointer-events-none" />
-          </div>
-          <span className="mt-1 px-1.5 py-0.5 rounded text-[10px] font-mono-numbers bg-slate-900/90 border border-emerald-500/40 text-emerald-300 whitespace-nowrap shadow-md">
-            HUB ALPHA
-          </span>
-        </div>
+        {/* Airspace Landmark Pins */}
+        {showLandmarks &&
+          AIRSPACE_LANDMARKS.map((lm) => {
+            const pt = project(lm.latitude, lm.longitude);
+            return (
+              <div
+                key={lm.id}
+                style={{ left: `${pt.x}%`, top: `${pt.y}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer z-10 pointer-events-auto"
+                title={`${lm.name} (${lm.zone})`}
+              >
+                <div
+                  className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shadow-sm transition-transform group-hover:scale-125 ${
+                    lm.category === 'HUB'
+                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                      : lm.category === 'HOSPITAL'
+                      ? 'bg-rose-500/20 border-rose-400 text-rose-300'
+                      : 'bg-slate-800/80 border-slate-600 text-slate-300'
+                  }`}
+                >
+                  <MapPin className="w-2.5 h-2.5" />
+                </div>
+                <span className="hidden group-hover:block mt-1 px-1.5 py-0.5 rounded text-[9px] font-mono-numbers bg-slate-950/95 border border-slate-700 text-slate-200 whitespace-nowrap shadow-lg z-30">
+                  {lm.name}
+                </span>
+              </div>
+            );
+          })}
 
         {/* Moving Live Drones Markers */}
         {filteredDrones.map((drone) => {
@@ -287,6 +320,10 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           const isOffline = drone.status === 'OFFLINE_WAITING';
           const isInFlight = drone.status === 'IN_FLIGHT';
           const isSelected = followDroneId === drone.droneId;
+          const place = getNearestPlace(
+            drone.currentLocation.latitude,
+            drone.currentLocation.longitude
+          );
 
           return (
             <div
@@ -302,7 +339,9 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
               onClick={() => {
                 setFollowDroneId(drone.droneId);
                 if (onSelectDrone) onSelectDrone(drone.droneId);
-                if (drone.currentMissionId && onSelectMission) {
+                if (onInspectLocation) {
+                  onInspectLocation(drone);
+                } else if (drone.currentMissionId && onSelectMission) {
                   onSelectMission(drone.currentMissionId);
                 }
               }}
@@ -351,19 +390,21 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                   {drone.droneId}
                 </span>
 
-                {/* Live speed / alt badge */}
-                {isInFlight && (
-                  <span className="text-[9px] font-mono-numbers text-sky-400 bg-black/70 px-1 rounded mt-0.5 whitespace-nowrap">
-                    {drone.speedKmh || 52}km/h · {drone.altitudeMeters || 115}m
-                  </span>
-                )}
+                {/* Place location tag under drone */}
+                <span className="text-[9px] font-sans font-medium text-sky-300 bg-black/85 px-1.5 py-0.2 rounded mt-0.5 whitespace-nowrap border border-sky-900/50 flex items-center gap-1 shadow-md">
+                  <MapPin className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+                  <span>{place.formattedLocation}</span>
+                </span>
               </div>
 
-              {/* Hover Telemetry Card */}
+              {/* Hover Place Location Telemetry Card */}
               {hoveredEntity === drone.droneId && (
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-52 p-2.5 rounded-xl bg-[#090f20]/95 border border-slate-700/80 shadow-2xl z-30 pointer-events-none backdrop-blur-md">
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-64 p-3 rounded-xl bg-[#080d1a]/95 border border-sky-500/40 shadow-2xl z-30 pointer-events-none backdrop-blur-md">
                   <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-[11px] font-mono-numbers font-semibold text-white">
-                    <span>{drone.droneId}</span>
+                    <span className="flex items-center gap-1.5 text-sky-400">
+                      <Plane className="w-3.5 h-3.5" />
+                      {drone.droneId}
+                    </span>
                     <span
                       className={`text-[10px] ${
                         isOffline
@@ -377,10 +418,23 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                     </span>
                   </div>
 
-                  <div className="mt-1.5 space-y-1 text-[10px] font-mono-numbers text-slate-300">
+                  {/* Prominent Place Location */}
+                  <div className="mt-2 p-2 rounded-lg bg-sky-950/40 border border-sky-800/40 space-y-0.5">
+                    <span className="text-[9px] font-bold text-sky-400 uppercase tracking-wider block">
+                      CURRENT PLACE LOCATION
+                    </span>
+                    <span className="text-xs font-bold text-white font-sans block">
+                      {place.formattedLocation}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-sans block">
+                      {place.zone}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 space-y-1 text-[10px] font-mono-numbers text-slate-300">
                     <div className="flex justify-between">
-                      <span className="text-slate-400">LIVE GPS:</span>
-                      <span className="text-sky-300">
+                      <span className="text-slate-400">EXACT GPS:</span>
+                      <span className="text-slate-200">
                         {drone.currentLocation.latitude.toFixed(5)}°N,{' '}
                         {drone.currentLocation.longitude.toFixed(5)}°E
                       </span>
@@ -399,10 +453,20 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">BATTERY:</span>
-                      <span className="text-emerald-400 font-semibold">
+                      <span
+                        className={
+                          drone.batteryPercent < 15
+                            ? 'text-red-400 font-bold'
+                            : 'text-emerald-400 font-semibold'
+                        }
+                      >
                         {drone.batteryPercent}%
                       </span>
                     </div>
+                  </div>
+
+                  <div className="mt-2 pt-1 border-t border-slate-800 text-[10px] text-sky-300 text-center font-sans font-medium">
+                    Click drone to open detailed place location
                   </div>
                 </div>
               )}
@@ -421,18 +485,25 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
             </span>
           </div>
 
-          {activeTrackingDrone && (
+          {activeTrackingDrone && activeTrackingPlace && (
             <div className="flex items-center gap-3 text-slate-300 text-[11px]">
-              <span className="text-sky-300 font-medium">
+              <span className="text-sky-300 font-semibold flex items-center gap-1 font-sans">
+                <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                <span>{activeTrackingPlace.formattedLocation}</span>
+              </span>
+              <span className="text-slate-500 hidden md:inline">·</span>
+              <span className="hidden md:inline">
                 {activeTrackingDrone.currentLocation.latitude.toFixed(5)}°N,{' '}
                 {activeTrackingDrone.currentLocation.longitude.toFixed(5)}°E
               </span>
-              <span className="text-slate-500">·</span>
-              <span>ALT: {activeTrackingDrone.altitudeMeters || 0}m AGL</span>
-              <span className="text-slate-500">·</span>
-              <span>SPD: {activeTrackingDrone.speedKmh || 0} km/h</span>
-              <span className="text-slate-500">·</span>
-              <span>HDG: {activeTrackingDrone.headingDeg || 42}°</span>
+              <span className="text-slate-500 hidden sm:inline">·</span>
+              <span className="hidden sm:inline">
+                ALT: {activeTrackingDrone.altitudeMeters || 0}m
+              </span>
+              <span className="text-slate-500 hidden sm:inline">·</span>
+              <span className="hidden sm:inline">
+                SPD: {activeTrackingDrone.speedKmh || 0}km/h
+              </span>
             </div>
           )}
         </div>

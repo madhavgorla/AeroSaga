@@ -13,6 +13,7 @@ import { RerouteMissionModal } from './components/missions/RerouteMissionModal';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { DiagnosticsPanel } from './components/diagnostics/DiagnosticsPanel';
 import { DroneCameraFeed } from './components/camera/DroneCameraFeed';
+import { DroneLocationModal } from './components/drones/DroneLocationModal';
 import { GeminiChatbot } from './components/ai/GeminiChatbot';
 import { LiveVoiceModal } from './components/ai/LiveVoiceModal';
 import { ToastProvider, useToast } from './components/ui/Toast';
@@ -58,6 +59,9 @@ function DashboardContent() {
   // Optical Camera & Airspace View state
   const [airspaceView, setAirspaceView] = useState<'radar' | 'camera' | 'split'>('radar');
   const [selectedCameraDroneId, setSelectedCameraDroneId] = useState<string>('DRONE-001');
+
+  // Drone Location Place Inspection Modal state
+  const [inspectedLocationDrone, setInspectedLocationDrone] = useState<Drone | null>(null);
 
   // Fetch fleet telemetry from backend
   const loadData = useCallback(
@@ -451,6 +455,7 @@ function DashboardContent() {
                         description: `Live optical gimbal feed linked to ${droneId}.`,
                       });
                     }}
+                    onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
                   />
                 )}
 
@@ -469,6 +474,7 @@ function DashboardContent() {
                       missions={missions}
                       onSelectMission={(id) => setSelectedMissionId(id)}
                       onSelectDrone={(droneId) => setSelectedCameraDroneId(droneId)}
+                      onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
                     />
                     <DroneCameraFeed
                       drones={drones}
@@ -495,6 +501,7 @@ function DashboardContent() {
                   onSignalOffline={handleSignalOffline}
                   onSignalReconnect={handleSignalReconnect}
                   onSelectMission={(id) => setSelectedMissionId(id)}
+                  onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
                 />
               </div>
 
@@ -546,6 +553,7 @@ function DashboardContent() {
                 onSignalOffline={handleSignalOffline}
                 onSignalReconnect={handleSignalReconnect}
                 onSelectMission={(id) => setSelectedMissionId(id)}
+                onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
               />
 
               {/* Live Fleet GPS Coordinates Monitor Table */}
@@ -701,6 +709,16 @@ function DashboardContent() {
         onOpenVoiceMode={() => {
           setIsAIChatOpen(false);
           setIsVoiceModalOpen(true);
+        }}
+      />
+
+      {/* Live Drone Location & Landmark Proximity Modal */}
+      <DroneLocationModal
+        drone={inspectedLocationDrone}
+        onClose={() => setInspectedLocationDrone(null)}
+        onViewCamera={(droneId) => {
+          setSelectedCameraDroneId(droneId);
+          setAirspaceView('camera');
         }}
       />
 
