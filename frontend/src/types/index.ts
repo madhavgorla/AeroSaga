@@ -116,3 +116,23 @@ export interface BackendMissionResponse {
   message?: string;
 }
 
+export interface CapturedDroneImage {
+  id: string;
+  droneId: string;
+  droneModel: string;
+  timestamp: string;
+  imageUrl: string;
+  cameraMode: 'daylight' | 'thermal' | 'night';
+  location: {
+    latitude: number;
+    longitude: number;
+    placeName: string;
+    altitudeMeters: number;
+  };
+  resolution: string;
+  gimbalPitchDeg: number;
+  missionId?: string;
+  notes?: string;
+}
+
+

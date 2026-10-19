@@ -13,6 +13,9 @@ import { RerouteMissionModal } from './components/missions/RerouteMissionModal';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { DiagnosticsPanel } from './components/diagnostics/DiagnosticsPanel';
 import { DroneCameraFeed } from './components/camera/DroneCameraFeed';
+import { CapturedGalleryGrid } from './components/camera/CapturedGalleryGrid';
+import { capturedImagesService } from './services/capturedImages';
+import type { CapturedDroneImage } from './types';
 import { DroneLocationModal } from './components/drones/DroneLocationModal';
 import { GeminiChatbot } from './components/ai/GeminiChatbot';
 import { LiveVoiceModal } from './components/ai/LiveVoiceModal';
@@ -32,6 +35,7 @@ import {
   ArrowRight,
   Camera,
   Layers,
+  Images,
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -57,8 +61,17 @@ function DashboardContent() {
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
 
   // Optical Camera & Airspace View state
-  const [airspaceView, setAirspaceView] = useState<'radar' | 'camera' | 'split'>('radar');
+  const [airspaceView, setAirspaceView] = useState<'radar' | 'camera' | 'split' | 'gallery'>('radar');
   const [selectedCameraDroneId, setSelectedCameraDroneId] = useState<string>('DRONE-001');
+  const [capturedImages, setCapturedImages] = useState<CapturedDroneImage[]>([]);
+
+  // Subscribe to fleet-captured images
+  useEffect(() => {
+    const unsubscribe = capturedImagesService.subscribe((imgs) => {
+      setCapturedImages(imgs);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Drone Location Place Inspection Modal state
   const [inspectedLocationDrone, setInspectedLocationDrone] = useState<Drone | null>(null);
@@ -434,6 +447,18 @@ function DashboardContent() {
                       <Layers className="w-3.5 h-3.5" />
                       <span>Split Screen</span>
                     </button>
+
+                    <button
+                      onClick={() => setAirspaceView('gallery')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        airspaceView === 'gallery'
+                          ? 'bg-sky-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Images className="w-3.5 h-3.5" />
+                      <span>Captured Photos ({capturedImages.length})</span>
+                    </button>
                   </div>
 
                   <div className="text-xs font-mono-numbers text-slate-400 flex items-center gap-2">
@@ -486,6 +511,10 @@ function DashboardContent() {
                       onSelectDrone={(droneId) => setSelectedCameraDroneId(droneId)}
                     />
                   </div>
+                )}
+
+                {airspaceView === 'gallery' && (
+                  <CapturedGalleryGrid images={capturedImages} />
                 )}
               </div>
 
@@ -634,6 +663,9 @@ function DashboardContent() {
                   </table>
                 </div>
               </div>
+
+              {/* Fleet Reconnaissance Captured Imagery */}
+              <CapturedGalleryGrid images={capturedImages} />
             </div>
           )}
 

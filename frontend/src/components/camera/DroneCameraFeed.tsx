@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import type { Drone, Mission } from '../../types';
+import type { Drone, CapturedDroneImage } from '../../types';
 import daylightImage from '../../assets/drone-camera-daylight.jpg';
 import thermalImage from '../../assets/drone-camera-thermal.jpg';
+import { capturedImagesService } from '../../services/capturedImages';
+import { getNearestPlace } from '../../services/landmarks';
+import { CapturedImageModal } from './CapturedImageModal';
+import { useToast } from '../ui/Toast';
 import {
   Camera,
   Eye,
@@ -18,6 +22,11 @@ import {
   Crosshair,
   Wifi,
   Compass,
+  Images,
+  MapPin,
+  X,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 
 interface DroneCameraFeedProps {
@@ -33,6 +42,7 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
   onSelectDrone,
   isCompact = false,
 }) => {
+  const { showToast } = useToast();
   const [selectedId, setSelectedId] = useState<string>(
     activeDroneId || drones[0]?.droneId || 'DRONE-001'
   );
@@ -41,6 +51,20 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [recSeconds, setRecSeconds] = useState<number>(884); // 14m 44s
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
+
+  // Captured Images state
+  const [capturedImages, setCapturedImages] = useState<CapturedDroneImage[]>([]);
+  const [lastCapturedImage, setLastCapturedImage] = useState<CapturedDroneImage | null>(null);
+  const [viewingImage, setViewingImage] = useState<CapturedDroneImage | null>(null);
+  const [showGalleryBar, setShowGalleryBar] = useState<boolean>(true);
+
+  // Subscribe to captured images service
+  useEffect(() => {
+    const unsubscribe = capturedImagesService.subscribe((imgs) => {
+      setCapturedImages(imgs);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Sync selectedId when activeDroneId changes
   useEffect(() => {
@@ -58,6 +82,9 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
   }, []);
 
   const activeDrone = drones.find((d) => d.droneId === selectedId) || drones[0];
+  const activePlace = activeDrone
+    ? getNearestPlace(activeDrone.currentLocation.latitude, activeDrone.currentLocation.longitude)
+    : null;
 
   const formatRecTime = (sec: number) => {
     const hrs = Math.floor(sec / 3600);
@@ -68,15 +95,42 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
       .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Handle capturing an image from the drone camera
   const handleCaptureSnapshot = () => {
     setIsCapturing(true);
+
+    const place = getNearestPlace(
+      activeDrone.currentLocation.latitude,
+      activeDrone.currentLocation.longitude
+    );
+
+    const newImage = capturedImagesService.addImage({
+      droneId: activeDrone.droneId,
+      droneModel: activeDrone.model,
+      imageUrl: cameraMode === 'thermal' ? thermalImage : daylightImage,
+      cameraMode,
+      location: {
+        latitude: activeDrone.currentLocation.latitude,
+        longitude: activeDrone.currentLocation.longitude,
+        placeName: place.formattedLocation,
+        altitudeMeters: activeDrone.altitudeMeters || 118,
+      },
+      resolution:
+        cameraMode === 'thermal' ? '1280 x 720 (FLIR IR)' : '3840 x 2160 (4K UHD Optical)',
+      gimbalPitchDeg: -45,
+      missionId: activeDrone.currentMissionId || undefined,
+      notes: `Recon snapshot captured during live flight patrol near ${place.placeName}.`,
+    });
+
     setTimeout(() => {
       setIsCapturing(false);
-      // Trigger subtle simulated screenshot
-      const link = document.createElement('a');
-      link.download = `AeroSaga-Feed-${selectedId}-${new Date().toISOString().slice(0, 19)}.jpg`;
-      link.href = cameraMode === 'thermal' ? thermalImage : daylightImage;
-      link.click();
+      setLastCapturedImage(newImage);
+
+      showToast({
+        type: 'success',
+        title: `📸 Photo Captured: ${activeDrone.droneId}`,
+        description: `Saved high-resolution reconnaissance snapshot at ${place.formattedLocation}.`,
+      });
     }, 300);
   };
 
@@ -86,14 +140,14 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
         isFullscreen
           ? 'fixed inset-4 z-50 max-h-[92vh]'
           : isCompact
-          ? 'h-[300px]'
-          : 'h-[380px] lg:h-[440px]'
+          ? 'h-[320px]'
+          : 'h-[420px] lg:h-[480px]'
       }`}
     >
       {/* Top HUD Toolbar */}
-      <div className="p-3 border-b border-slate-800/60 bg-[#080d1a]/90 backdrop-blur-md flex flex-wrap items-center justify-between gap-2.5 z-20">
+      <div className="p-3 border-b border-slate-800/60 bg-[#080d1a]/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-2.5 z-20">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-[10px] font-mono-numbers text-rose-300 font-semibold">
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-[10px] font-mono-numbers text-rose-300 font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
             <span>LIVE 4K GIMBAL</span>
           </div>
@@ -180,13 +234,28 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
             </button>
           </div>
 
-          {/* Snapshot Button */}
+          {/* Captured Photos Gallery Toggle Button */}
+          <button
+            onClick={() => setShowGalleryBar(!showGalleryBar)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono-numbers transition-colors border ${
+              showGalleryBar
+                ? 'bg-sky-950/70 text-sky-300 border-sky-600 font-semibold'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title="Toggle captured reconnaissance photo gallery"
+          >
+            <Images className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden sm:inline">Photos ({capturedImages.length})</span>
+          </button>
+
+          {/* Capture Snapshot Action Button */}
           <button
             onClick={handleCaptureSnapshot}
-            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition-colors"
-            title="Capture Telemetry Frame Snapshot"
+            className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-all"
+            title="Capture Instant Recon Snapshot"
           >
             <Camera className="w-3.5 h-3.5" />
+            <span>Capture</span>
           </button>
 
           {/* Fullscreen Toggle */}
@@ -235,7 +304,7 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
           {/* Top HUD Line */}
           <div className="flex items-start justify-between">
             {/* Top Left: REC & Resolution */}
-            <div className="space-y-0.5 bg-black/40 backdrop-blur-sm p-2 rounded-lg border border-white/10 text-[11px]">
+            <div className="space-y-0.5 bg-black/50 backdrop-blur-sm p-2 rounded-lg border border-white/10 text-[11px]">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                 <span className="font-bold text-white tracking-widest">
@@ -248,15 +317,18 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
               </div>
             </div>
 
-            {/* Top Right: Signal & Latency */}
-            <div className="space-y-0.5 bg-black/40 backdrop-blur-sm p-2 rounded-lg border border-white/10 text-right text-[11px]">
+            {/* Top Right: Signal & Place Location */}
+            <div className="space-y-0.5 bg-black/50 backdrop-blur-sm p-2 rounded-lg border border-white/10 text-right text-[11px]">
               <div className="flex items-center justify-end gap-1.5 text-emerald-400 font-semibold">
                 <Wifi className="w-3.5 h-3.5" />
                 <span>5.8 GHz O3 LINK: 99.4%</span>
               </div>
-              <div className="text-[10px] text-slate-400">
-                LATENCY: 18ms · BITRATE: 64 Mbps
-              </div>
+              {activePlace && (
+                <div className="text-[10px] text-sky-300 font-sans font-medium flex items-center justify-end gap-1">
+                  <MapPin className="w-3 h-3 text-sky-400" />
+                  <span>{activePlace.formattedLocation}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -273,10 +345,10 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
               <div className="w-12 h-[1px] bg-white/40 absolute -top-10" />
               <div className="w-12 h-[1px] bg-white/40 absolute -bottom-10" />
 
-              {/* Target Lock Box on Warehouse Pad */}
+              {/* Target Lock Box */}
               <div className="absolute -top-6 -right-12 border-2 border-emerald-400/90 w-16 h-16 rounded animate-pulse flex flex-col justify-between p-1">
                 <span className="text-[9px] font-bold text-emerald-400 bg-black/60 px-1 rounded">
-                  PAD B-02
+                  RECON TARGET
                 </span>
                 <span className="text-[8px] text-emerald-300 font-mono">
                   LOCK 98%
@@ -318,25 +390,114 @@ export const DroneCameraFeed: React.FC<DroneCameraFeedProps> = ({
             </div>
           </div>
         </div>
+
+        {/* INSTANT CAPTURE PREVIEW POPUP CARD (Displays when image is captured!) */}
+        {lastCapturedImage && (
+          <div className="absolute bottom-4 right-4 z-30 max-w-sm p-3 rounded-xl bg-slate-950/95 border border-emerald-500/90 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-3 duration-300 select-none">
+            <div className="flex items-center gap-3">
+              <img
+                src={lastCapturedImage.imageUrl}
+                alt="Captured thumbnail preview"
+                className="w-14 h-14 rounded-lg object-cover border border-emerald-400/60 shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                onClick={() => setViewingImage(lastCapturedImage)}
+              />
+
+              <div className="flex-1 min-w-0 text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="text-[10px] font-bold text-emerald-400 font-mono uppercase tracking-wider">
+                    RECON IMAGE CAPTURED
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-white truncate font-sans mt-0.5">
+                  {lastCapturedImage.location.placeName}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <button
+                    onClick={() => setViewingImage(lastCapturedImage)}
+                    className="text-[11px] font-bold text-sky-400 hover:text-sky-300 font-sans flex items-center gap-1"
+                  >
+                    <span>Inspect Image</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setLastCapturedImage(null)}
+                className="text-slate-400 hover:text-white p-1"
+                aria-label="Dismiss capture preview"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* HORIZONTAL CAPTURED RECON GALLERY FILMSTRIP TRAY (Shows all captured images) */}
+      {showGalleryBar && (
+        <div className="p-2.5 bg-[#050811] border-t border-slate-800/80 flex items-center gap-3 overflow-x-auto z-20 shrink-0">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono-numbers text-slate-400 pl-1 shrink-0">
+            <Images className="w-3.5 h-3.5 text-sky-400" />
+            <span className="font-semibold text-slate-300">CAPTURED IMAGES:</span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+            {capturedImages.map((img) => (
+              <div
+                key={img.id}
+                onClick={() => setViewingImage(img)}
+                className="group relative w-20 h-14 rounded-lg overflow-hidden border border-slate-700/80 hover:border-sky-400 shrink-0 cursor-pointer transition-all hover:scale-105 shadow-sm"
+                title={`${img.droneId} at ${img.location.placeName}`}
+              >
+                <img
+                  src={img.imageUrl}
+                  alt={img.id}
+                  className="w-full h-full object-cover group-hover:brightness-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-1">
+                  <span className="text-[8px] font-mono-numbers text-white font-bold truncate">
+                    {img.droneId}
+                  </span>
+                  <span className="text-[7px] font-mono-numbers text-sky-300 truncate">
+                    {new Date(img.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Camera Footer Banner */}
-      <div className="px-4 py-2 bg-[#060a14] border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 font-mono-numbers">
+      <div className="px-4 py-2 bg-[#060a14] border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 font-mono-numbers shrink-0">
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-slate-300">
+          <span className="flex items-center gap-1.5 text-slate-300 font-sans">
             <Crosshair className="w-3.5 h-3.5 text-sky-400" />
-            <span>Target Drop Zone Alpha</span>
+            <span>Target Recon: <strong>{activePlace?.placeName || 'Sector Dropzone'}</strong></span>
           </span>
           <span className="hidden sm:inline text-slate-600">·</span>
           <span className="hidden sm:inline text-slate-400">
-            Live Optical Telemetry Link
+            Telemetry 5.8 GHz Link Active
           </span>
         </div>
 
-        <div className="text-[11px] text-slate-500">
-          MODE: {cameraMode.toUpperCase()} ({zoomLevel}X OPTICAL)
+        <div className="text-[11px] text-slate-400">
+          TOTAL SNAPSHOTS: <strong className="text-white font-bold">{capturedImages.length}</strong>
         </div>
       </div>
+
+      {/* High-Resolution Full-Screen Image Inspector Modal */}
+      <CapturedImageModal
+        image={viewingImage}
+        allImages={capturedImages}
+        onClose={() => setViewingImage(null)}
+        onSelectImage={(img) => setViewingImage(img)}
+      />
     </div>
   );
 };
