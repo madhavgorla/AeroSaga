@@ -40,6 +40,8 @@ Prerequisites: Docker Desktop with Compose, Git, JDK 21, Node.js LTS.
 
 The Temporal container configuration is for local development, not production. Review image and SDK compatibility before final submission. `docker compose down -v` deletes local persistent data.
 
+The backend exposes the full documented REST contract in [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md). Mission requests require an available seeded drone and 1–100 valid waypoints. Missions and events are persisted in MySQL, while mission execution and drone connectivity signals are handled by Temporal. The workflow is simulated; it does not connect to physical drones or provide live GPS.
+
 ## Git branches
 `main` is stable reviewed code only. Branches:
 - `feature/madhav-frontend`
