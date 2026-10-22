@@ -23,8 +23,16 @@ public class MissionWorkflowImpl implements MissionWorkflow {
 
   int index = 0;
   for (MissionRequest.WaypointRequest wp : input.waypoints()) {
+   if(aborted){
+    handleAbort(id, drone);
+    return;
+   }
    index++;
    activities.flyToWaypoint(id, drone, index, wp.latitude(), wp.longitude());
+  }
+  if(aborted){
+   handleAbort(id, drone);
+   return;
   }
 
   setState(id, "RETURNING", "Delivery complete, returning to base");
@@ -36,7 +44,11 @@ public class MissionWorkflowImpl implements MissionWorkflow {
   this.state = newState;
   activities.updateBusinessStatus(missionId, newState, message);
  }
- 
+ private void handleAbort(String missionId, String droneId) {
+  setState(missionId, "RETURNING", "Abort requested, returning to base");
+  activities.returnToBase(missionId, droneId);
+  setState(missionId, "ABORTED", "Mission aborted, drone back at base");
+ }
  @Override public void droneOffline(){offline=true;}
  @Override public void droneReconnected(){reconnected=true;}
  @Override public void abortMission(){aborted=true;}
