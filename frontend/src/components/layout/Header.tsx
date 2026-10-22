@@ -47,6 +47,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectMission,
   onFilterStatus,
 }) => {
+  const [isAlertDismissed, setIsAlertDismissed] = React.useState(false);
+
   const navItems = [
     { id: 'overview', label: 'Fleet Command' },
     { id: 'missions', label: 'Active Missions' },
@@ -61,7 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <div className="sticky top-0 z-40 w-full flex flex-col">
       {/* Primary Header Navigation Bar */}
-      <header className="w-full bg-[#080d1a]/95 backdrop-blur-xl border-b border-slate-800/60 px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
+      <header className="w-full bg-[#080d1a]/95 backdrop-blur-xl border-b border-slate-800/80 px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
         {/* Brand Zone */}
         <div className="flex items-center gap-3 shrink-0">
           <button
@@ -76,16 +78,15 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onTabChange('overview')}
             className="flex items-center gap-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded-lg group"
           >
-            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400 group-hover:border-sky-400/50 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 group-hover:border-sky-400/50 transition-colors">
               <Plane className="w-4 h-4" />
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-base font-bold tracking-tight text-white font-display">
                 AEROSAGA
               </span>
-              <span className="hidden xl:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono-numbers text-sky-400 bg-sky-950/40 border border-sky-800/40 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                MISSION CONTROL
+              <span className="hidden xl:inline text-[11px] font-mono-numbers text-slate-400 font-medium">
+                Mission Control
               </span>
             </div>
           </button>
@@ -110,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`px-3 py-1.5 rounded-lg transition-all relative ${
+                className={`px-3 py-1.5 rounded-lg transition-all ${
                   isActive
                     ? 'text-sky-400 bg-sky-500/10 font-semibold'
                     : 'hover:text-slate-200 hover:bg-slate-800/40'
@@ -124,27 +125,26 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action Tools */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Persistent Header Warning Pill (when critical battery drones exist) */}
-          {criticalDrones.length > 0 && (
+          {/* Subtle alert notification icon if critical drones exist */}
+          {criticalDrones.length > 0 && isAlertDismissed && (
             <button
               onClick={() => {
+                setIsAlertDismissed(false);
                 onTabChange('drones');
                 onSelectDrone(criticalDrones[0].droneId);
               }}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 hover:bg-red-500/25 text-red-300 hover:text-white text-xs font-mono-numbers transition-all shadow-[0_0_12px_rgba(239,68,68,0.25)] animate-pulse"
-              title="Click to view drones with critical battery levels"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 text-xs transition-colors"
+              title="Low battery alert active - click to inspect"
             >
-              <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-              <span className="font-bold text-red-400">
-                {criticalDrones.length} LOW BATTERY
-              </span>
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span className="font-mono tabular-nums text-[11px] font-semibold">{criticalDrones.length}</span>
             </button>
           )}
 
           {/* Gemini AI Copilot button */}
           <button
             onClick={onOpenAIChat}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 border border-slate-700/80 text-sky-300 hover:text-white hover:border-sky-500/80 transition-all shadow-sm"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700/80 text-sky-300 hover:text-white hover:border-sky-500/60 transition-colors"
             title="Open Gemini AI Mission Copilot"
           >
             <Sparkles className="w-3.5 h-3.5 text-sky-400" />
@@ -154,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Live Voice Audio button */}
           <button
             onClick={onOpenVoiceModal}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white hover:border-slate-600 transition-colors"
             title="Open Gemini Live Voice Radio Channel"
           >
             <Mic className="w-3.5 h-3.5 text-emerald-400" />
@@ -168,7 +168,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800 transition-colors"
             title="Refresh fleet data"
             aria-label="Refresh fleet data"
           >
@@ -180,7 +180,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Primary Launch CTA */}
           <button
             onClick={onOpenLaunchModal}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 active:bg-sky-700 rounded-lg shadow-sm transition-all whitespace-nowrap shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-500 active:bg-sky-700 rounded-lg shadow-sm transition-colors whitespace-nowrap shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Launch Mission</span>
@@ -188,53 +188,44 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* Persistent Critical Battery Notification Banner */}
-      {criticalDrones.length > 0 && (
-        <div className="w-full bg-red-950/80 border-b border-red-500/40 px-4 md:px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs text-red-200 backdrop-blur-md shadow-lg">
-          <div className="flex items-center gap-2.5">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-            </span>
+      {/* Sleek, Dismissible Low Battery Notification Banner */}
+      {criticalDrones.length > 0 && !isAlertDismissed && (
+        <div className="w-full bg-red-950/90 border-b border-red-500/30 px-4 md:px-6 py-1.5 flex items-center justify-between gap-3 text-xs text-red-200 backdrop-blur-md">
+          <div className="flex items-center gap-2 truncate">
             <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-            <span className="font-mono-numbers">
-              <strong className="font-bold text-red-300 uppercase tracking-wide mr-1.5">
-                CRITICAL BATTERY NOTIFICATION (&lt;15%):
-              </strong>
+            <span className="truncate">
+              <strong className="text-white font-medium">Critical Battery Alert:</strong>{' '}
               {criticalDrones.length === 1 ? (
                 <>
-                  <span className="text-white font-semibold font-mono">
-                    {criticalDrones[0].droneId}
-                  </span>{' '}
-                  battery has dropped to{' '}
-                  <span className="text-red-300 font-bold">
-                    {criticalDrones[0].batteryPercent}%
-                  </span>
-                  . Immediate Return-to-Base (RTB) protocol required to prevent power depletion.
+                  <span className="font-mono text-white">{criticalDrones[0].droneId}</span> is at{' '}
+                  <span className="text-red-300 font-bold">{criticalDrones[0].batteryPercent}%</span>. Immediate Return-to-Base required.
                 </>
               ) : (
                 <>
-                  <span className="text-white font-semibold">
-                    {criticalDrones.length} drones
-                  </span>{' '}
-                  below 15% threshold ({criticalDrones
-                    .map((d) => `${d.droneId}: ${d.batteryPercent}%`)
-                    .join(', ')}). Immediate fleet recovery protocol required.
+                  {criticalDrones.length} drones below 15% threshold ({criticalDrones.map((d) => `${d.droneId}: ${d.batteryPercent}%`).join(', ')}).
                 </>
               )}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => {
                 onTabChange('drones');
                 if (criticalDrones[0]) onSelectDrone(criticalDrones[0].droneId);
               }}
-              className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium text-[11px] transition-colors flex items-center gap-1.5 shadow-sm font-mono-numbers"
+              className="px-2.5 py-0.5 rounded-md bg-red-600 hover:bg-red-500 text-white text-[11px] font-medium transition-colors flex items-center gap-1 font-mono-numbers"
             >
-              <span>Inspect {criticalDrones.length === 1 ? criticalDrones[0].droneId : 'Fleet'}</span>
+              <span>Inspect</span>
               <ArrowRight className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setIsAlertDismissed(true)}
+              className="p-1 rounded-md text-red-400 hover:text-white hover:bg-red-900/40 transition-colors"
+              title="Dismiss alert banner"
+              aria-label="Dismiss alert banner"
+            >
+              <span className="text-xs font-bold leading-none">✕</span>
             </button>
           </div>
         </div>
