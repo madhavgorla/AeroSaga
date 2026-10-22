@@ -2,6 +2,7 @@ package com.aerosaga.temporal;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
 import io.temporal.workflow.Workflow;
+import com.aerosaga.mission.MissionRequest;
 import java.time.Duration;
 /** Hariom: complete policy, route progression and tests. Keep side effects in Activities. */
 public class MissionWorkflowImpl implements MissionWorkflow {
@@ -10,19 +11,32 @@ public class MissionWorkflowImpl implements MissionWorkflow {
    .setRetryOptions(RetryOptions.newBuilder().setInitialInterval(Duration.ofSeconds(1)).setMaximumAttempts(3).build()).build());
  private boolean offline,reconnected,aborted;
  private String state="SCHEDULED";
- @Override public void runMission(MissionWorkflowInput input) {
-  activities.updateBusinessStatus(input.missionId(),state,"Workflow started");
-  activities.dispatch(input.missionId(),input.droneId());
-  state="IN_PROGRESS"; activities.updateBusinessStatus(input.missionId(),state,"Drone dispatched");
-  Workflow.await(() -> offline || aborted);
-  if (aborted) { state="ABORTED"; activities.updateBusinessStatus(input.missionId(),state,"Aborted"); return; }
-  state="SUSPENDED_OFFLINE"; activities.updateBusinessStatus(input.missionId(),state,"Offline; waiting for reconnect");
-  Workflow.await(() -> reconnected || aborted);
-  if (aborted) { state="ABORTED"; activities.updateBusinessStatus(input.missionId(),state,"Aborted while waiting"); return; }
-  state="RECOVERING"; activities.updateBusinessStatus(input.missionId(),state,"Reconnect received");
-  state="RETURNING"; activities.returnToBase(input.missionId(),input.droneId());
-  activities.updateBusinessStatus(input.missionId(),"COMPLETED","Returned to base"); state="COMPLETED";
+
+ @Override
+ public void runMission(MissionWorkflowInput input) {
+  String id = input.missionId();
+  String drone = input.droneId();
+
+  setState(id, "SCHEDULED", "Workflow started");
+  activities.dispatch(id, drone);
+  setState(id, "IN_PROGRESS", "Drone dispatched");
+
+  int index = 0;
+  for (MissionRequest.WaypointRequest wp : input.waypoints()) {
+   index++;
+   activities.flyToWaypoint(id, drone, index, wp.latitude(), wp.longitude());
+  }
+
+  setState(id, "RETURNING", "Delivery complete, returning to base");
+  activities.returnToBase(id, drone);
+  setState(id, "COMPLETED", "Returned to base");
  }
+
+ private void setState(String missionId, String newState, String message) {
+  this.state = newState;
+  activities.updateBusinessStatus(missionId, newState, message);
+ }
+ 
  @Override public void droneOffline(){offline=true;}
  @Override public void droneReconnected(){reconnected=true;}
  @Override public void abortMission(){aborted=true;}
