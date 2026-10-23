@@ -57,4 +57,73 @@ class MissionWorkflowTest {
         verify(activities).returnToBase("m1", "d1");
         verify(activities).updateBusinessStatus("m1", "COMPLETED", "Returned to base");
     }
+
+
+
+    @Test
+    void abortDuringFlightReturnsToBaseAndEndsAborted() {
+        MissionWorkflow workflow = client.newWorkflowStub(
+                MissionWorkflow.class,
+                WorkflowOptions.newBuilder()
+                        .setTaskQueue(TASK_QUEUE)
+                        .setWorkflowId("test-mission-2")
+                        .build());
+
+        // Separate stub to send the abort signal to the running workflow.
+        MissionWorkflow signalWorkflow = client.newWorkflowStub(
+                MissionWorkflow.class,
+                "test-mission-2");
+
+        MissionWorkflowInput input = new MissionWorkflowInput(
+                "m2",
+                "d1",
+                "Varanasi",
+                List.of(
+                        new MissionRequest.WaypointRequest(25.3, 82.9),
+                        new MissionRequest.WaypointRequest(25.4, 83.0)
+                )
+        );
+
+        // Send abort while the first waypoint Activity is executing.
+        // index++ happens before the Activity call, so the first index is 1.
+        doAnswer(invocation -> {
+            signalWorkflow.abortMission();
+            return null;
+        }).when(activities).flyToWaypoint(
+                eq("m2"),
+                eq("d1"),
+                eq(1),
+                anyDouble(),
+                anyDouble()
+        );
+
+        workflow.runMission(input);
+
+        // Only the first waypoint should execute.
+        verify(activities, times(1)).flyToWaypoint(
+                eq("m2"),
+                eq("d1"),
+                anyInt(),
+                anyDouble(),
+                anyDouble()
+        );
+
+        // The drone must return to base after abort.
+        verify(activities).returnToBase("m2", "d1");
+
+        // The final business status must be ABORTED.
+        verify(activities).updateBusinessStatus(
+                eq("m2"),
+                eq("ABORTED"),
+                anyString()
+        );
+
+        // The mission must never be marked COMPLETED.
+        verify(activities, never()).updateBusinessStatus(
+                eq("m2"),
+                eq("COMPLETED"),
+                anyString()
+        );
+    }
+
 }
