@@ -6,4 +6,5 @@ public class MissionActivitiesImpl implements MissionActivities {
  public void dispatch(String missionId,String droneId) { /* TODO simulate dispatch + persist event */ }
  public void returnToBase(String missionId,String droneId) { /* TODO simulate return + persist event */ }
  public void updateBusinessStatus(String missionId,String status,String message) { /* TODO persist status and idempotent event */ }
+ public void flyToWaypoint(String missionId,String droneId,int index,double latitude,double longitude) { /* TODO simulate flight to waypoint + persist event */ }
 }

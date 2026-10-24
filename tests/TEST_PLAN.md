@@ -9,4 +9,10 @@
 ## Database/simulator — Trishul
 - [ ] Clean schema/migrations; mission/event persistence; keys/indexes; duplicate telemetry safe.
 ## Delivery — Hariom
-- [ ] Clean checkout Docker setup, CI, evidence screenshots, known limitations, demo script.
+- [x] Workflow starts (happy path test)
+- [x] Abort returns to base (test)
+- [x] Offline signal waits durably, then FAILED after 5 min timeout (test)
+- [ ] Reconnect continues recovery
+- [ ] Worker restart test
+- [ ] Retry/timeouts
+- [ ] Reroute
