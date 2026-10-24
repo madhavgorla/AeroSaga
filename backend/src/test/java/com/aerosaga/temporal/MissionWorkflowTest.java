@@ -7,8 +7,11 @@ import static org.mockito.Mockito.*;
 import com.aerosaga.mission.MissionRequest;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
+import io.temporal.client.WorkflowStub;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
+
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -126,4 +129,75 @@ class MissionWorkflowTest {
         );
     }
 
+    @Test
+    void offlineWithoutReconnectEndsFailedAfterTimeout(){
+
+        // Setup
+        MissionWorkflow workflow = client.newWorkflowStub(
+                MissionWorkflow.class,
+                WorkflowOptions.newBuilder()
+                        .setTaskQueue(TASK_QUEUE)
+                        .setWorkflowId("test-mission-3")
+                        .build());
+
+        MissionWorkflow signalWorkflow = client.newWorkflowStub(
+                MissionWorkflow.class,
+                "test-mission-3");
+
+        MissionWorkflowInput input = new MissionWorkflowInput(
+                "m3",
+                        "d1",
+                "Varanasi",
+                List.of(
+                        new MissionRequest.WaypointRequest(25.3, 82.9),
+                        new MissionRequest.WaypointRequest(25.4, 83.0)
+                )
+        );
+
+        //Trigger offline signal at waypoint 1
+
+        doAnswer(invocation -> {
+            signalWorkflow.droneOffline();
+            return null;
+        }).when(activities).flyToWaypoint(
+                eq("m3"),
+                eq("d1"),
+                eq(1),
+                anyDouble(),
+                anyDouble()
+        );
+
+        // Start workflow asynchronously
+        WorkflowClient.start(workflow::runMission, input);
+
+        //Skip ahead by 6 minutes in Temporal's test environment
+        env.sleep(Duration.ofMinutes(4));
+        String statusAt4Min = workflow.getMissionState();
+        assertEquals("SUSPENDED_OFFLINE", statusAt4Min);
+
+        env.sleep(Duration.ofMinutes(2));
+        String statusAt6Min = workflow.getMissionState();
+        assertEquals("FAILED", statusAt6Min);
+
+        //Get result and query final state
+        WorkflowStub.fromTyped(workflow).getResult(Void.class);
+        String status = workflow.getMissionState();
+
+        // Assertions
+        verify(activities, times(1)).returnToBase(
+                eq("m3"),
+                eq("d1")
+        );
+
+        verify(activities, never()).flyToWaypoint(
+                eq("m3"),
+                eq("d1"),
+                eq(2),
+                anyDouble(),
+                anyDouble()
+        );
+
+        verify(activities).updateBusinessStatus(eq("m3"), eq("FAILED"), anyString());
+        verify(activities, never()).updateBusinessStatus(eq("m3"), eq("COMPLETED"), anyString());
+    }
 }
