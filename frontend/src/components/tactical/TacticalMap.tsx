@@ -3,6 +3,13 @@ import type { Drone, Mission } from '../../types';
 import { AIRSPACE_LANDMARKS, getNearestPlace } from '../../services/landmarks';
 import { useToast } from '../ui/Toast';
 import {
+  windTelemetryService,
+  WindTelemetry,
+  CoordinateWeather,
+  PrecipitationCell,
+  WIND_PRESETS,
+} from '../../services/windTelemetry';
+import {
   Plane,
   MapPin,
   Radio,
@@ -25,6 +32,13 @@ import {
   CheckCircle2,
   Undo2,
   Plus,
+  CloudRain,
+  CloudLightning,
+  Wind,
+  Droplets,
+  Thermometer,
+  CloudFog,
+  AlertCircle,
 } from 'lucide-react';
 
 export interface ForbiddenZonePoint {
@@ -105,6 +119,22 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
 
   // Breadcrumbs history for live flight trail
   const [trailMap, setTrailMap] = useState<Record<string, Array<{ x: number; y: number }>>>({});
+
+  // Weather Layer state (Wind Speed Vectors & Precipitation Alerts)
+  const [showWeatherLayer, setShowWeatherLayer] = useState<boolean>(true);
+  const [windData, setWindData] = useState<WindTelemetry>(windTelemetryService.getWind());
+  const [weatherPreset, setWeatherPreset] = useState<string>('high');
+  const [dismissedWeatherAlert, setDismissedWeatherAlert] = useState<boolean>(false);
+  const [hoveredWeatherPoint, setHoveredWeatherPoint] = useState<string | null>(null);
+  const alertedWeatherRef = useRef<Set<string>>(new Set());
+
+  // Subscribe to real-time wind telemetry & precipitation updates
+  useEffect(() => {
+    const unsub = windTelemetryService.subscribe((telemetry) => {
+      setWindData(telemetry);
+    });
+    return unsub;
+  }, []);
 
   // Center coordinate: Dispatch Hub Alpha (16.5062, 80.6480)
   const centerLat = 16.514;
@@ -598,6 +628,83 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
   const hasActiveBreach = breachedDrones.length > 0;
   const hasPathConflict = pathConflicts.length > 0;
 
+  // Compute live weather, wind vectors and precipitation alerts for all active mission coordinates
+  interface MissionWeatherPoint {
+    id: string;
+    missionId: string;
+    droneId: string;
+    label: string;
+    isDrone: boolean;
+    latitude: number;
+    longitude: number;
+    pos: { x: number; y: number };
+    weather: CoordinateWeather;
+  }
+
+  const missionWeatherPoints: MissionWeatherPoint[] = [];
+
+  activeMissions.forEach((m) => {
+    // 1. Waypoints along the mission path
+    if (m.waypoints && m.waypoints.length > 0) {
+      m.waypoints.forEach((wp, idx) => {
+        const weather = windTelemetryService.getWeatherAtCoordinate(wp.latitude, wp.longitude);
+        missionWeatherPoints.push({
+          id: `wp-${m.missionId}-${idx}`,
+          missionId: m.missionId,
+          droneId: m.droneId,
+          label: wp.name || `Waypoint #${idx + 1}`,
+          isDrone: false,
+          latitude: wp.latitude,
+          longitude: wp.longitude,
+          pos: project(wp.latitude, wp.longitude),
+          weather,
+        });
+      });
+    }
+
+    // 2. Current live drone coordinate for this mission
+    const assignedDrone = drones.find((d) => d.droneId === m.droneId);
+    if (assignedDrone) {
+      const weather = windTelemetryService.getWeatherAtCoordinate(
+        assignedDrone.currentLocation.latitude,
+        assignedDrone.currentLocation.longitude
+      );
+      missionWeatherPoints.push({
+        id: `drone-loc-${assignedDrone.droneId}`,
+        missionId: m.missionId,
+        droneId: assignedDrone.droneId,
+        label: `${assignedDrone.droneId} In-Flight`,
+        isDrone: true,
+        latitude: assignedDrone.currentLocation.latitude,
+        longitude: assignedDrone.currentLocation.longitude,
+        pos: project(assignedDrone.currentLocation.latitude, assignedDrone.currentLocation.longitude),
+        weather,
+      });
+    }
+  });
+
+  const activeWeatherAlerts = missionWeatherPoints.filter((pt) => pt.weather.hasAlert);
+  const criticalWeatherAlerts = missionWeatherPoints.filter(
+    (pt) => pt.weather.alertSeverity === 'WARNING' || pt.weather.alertSeverity === 'CRITICAL'
+  );
+  const precipitationRadarCells = windTelemetryService.getPrecipitationCells();
+
+  // Notify operator if critical weather or squall affects any active mission coordinate
+  useEffect(() => {
+    if (!showWeatherLayer) return;
+    criticalWeatherAlerts.forEach((alert) => {
+      const key = `${alert.missionId}-${alert.id}-${alert.weather.alertSeverity}`;
+      if (!alertedWeatherRef.current.has(key)) {
+        alertedWeatherRef.current.add(key);
+        showToast({
+          type: 'warning',
+          title: `⛈️ Weather Alert: ${alert.droneId}`,
+          description: `${alert.label}: ${alert.weather.alertMessage}`,
+        });
+      }
+    });
+  }, [criticalWeatherAlerts, showWeatherLayer, showToast]);
+
   // Handle Canvas Click when in Drawing Mode
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDrawingNFZ || !mapCanvasRef.current) return;
@@ -732,6 +839,31 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           >
             <Radio className="w-3.5 h-3.5 text-emerald-400" />
             <span>RSSI Heatmap</span>
+          </button>
+
+          {/* Weather Layer Toggle (Wind Speed & Precipitation Alerts) */}
+          <button
+            onClick={() => setShowWeatherLayer(!showWeatherLayer)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+              showWeatherLayer
+                ? 'bg-cyan-950/70 text-cyan-300 border-cyan-500/60 shadow-sm ring-1 ring-cyan-500/30'
+                : 'text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+            title="Toggle live wind speed vectors and precipitation alerts for mission coordinates"
+          >
+            <CloudRain className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Weather Layer</span>
+            {activeWeatherAlerts.length > 0 && (
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  criticalWeatherAlerts.length > 0
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                }`}
+              >
+                {activeWeatherAlerts.length}
+              </span>
+            )}
           </button>
 
           {/* Draw Forbidden Zone Toggle Button */}
@@ -984,6 +1116,72 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           </div>
         </div>
       )}
+
+      {/* Floating Sleek Weather / Squall Hazard Alert Banner Overlay */}
+      {showWeatherLayer &&
+        criticalWeatherAlerts.length > 0 &&
+        !dismissedWeatherAlert &&
+        !hasPathConflict &&
+        !hasActiveBreach && (
+          <div className="absolute top-14 left-3 right-3 lg:left-auto lg:right-3 lg:max-w-md z-30 p-3 rounded-xl bg-[#071322]/95 border border-cyan-500/50 shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-start justify-between gap-2.5">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 shrink-0 mt-0.5">
+                  <CloudLightning className="w-4 h-4 text-cyan-400 animate-pulse" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-white">
+                      Atmospheric Weather Alert
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                        criticalWeatherAlerts[0].weather.alertSeverity === 'CRITICAL'
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      }`}
+                    >
+                      {criticalWeatherAlerts[0].weather.precipitationMmH > 0 ? 'Precipitation Squall' : 'High Wind Warning'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-1 leading-snug">
+                    <strong className="text-cyan-300 font-mono">{criticalWeatherAlerts[0].droneId}</strong> ({criticalWeatherAlerts[0].label}):{' '}
+                    <span className="text-amber-200 font-medium">{criticalWeatherAlerts[0].weather.alertMessage}</span>.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {onRerouteMission && (
+                      <button
+                        onClick={() => {
+                          const m = missions.find((ms) => ms.missionId === criticalWeatherAlerts[0].missionId);
+                          if (m) onRerouteMission(m);
+                        }}
+                        className="px-2.5 py-1 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium shadow-sm transition-colors flex items-center gap-1"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reroute Safe Path</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setDismissedWeatherAlert(true)}
+                      className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors"
+                    >
+                      Acknowledge
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setDismissedWeatherAlert(true)}
+                className="p-1 text-slate-400 hover:text-white rounded transition-colors"
+                title="Dismiss weather alert"
+                aria-label="Dismiss weather alert"
+              >
+                <span className="text-xs font-bold leading-none">✕</span>
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Interactive Tactical Canvas */}
       <div
@@ -1293,7 +1491,215 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
               </g>
             );
           })}
+
+          {/* WEATHER LAYER: PRECIPITATION RADAR CELLS & GUST ISOBARS */}
+          {showWeatherLayer && (
+            <g key="weather-radar-cells">
+              <defs>
+                <radialGradient id="squall-gradient" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.55" />
+                  <stop offset="45%" stopColor="#0284c7" stopOpacity="0.30" />
+                  <stop offset="85%" stopColor="#38bdf8" stopOpacity="0.10" />
+                  <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+                </radialGradient>
+                <radialGradient id="storm-gradient" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#ec4899" stopOpacity="0.65" />
+                  <stop offset="40%" stopColor="#ef4444" stopOpacity="0.35" />
+                  <stop offset="85%" stopColor="#f59e0b" stopOpacity="0.15" />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                </radialGradient>
+                <radialGradient id="drizzle-gradient" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
+                  <stop offset="60%" stopColor="#06b6d4" stopOpacity="0.20" />
+                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              {/* Render Active Precipitation Cells */}
+              {precipitationRadarCells.map((cell) => {
+                const center = project(cell.latitude, cell.longitude);
+                const rPercent = Math.max(7, (cell.radiusKm / (latSpan * 111)) * 100);
+                const isSevere = cell.alertLevel === 'CRITICAL' || cell.intensityMmH > 9;
+                const isWarning = cell.alertLevel === 'WARNING' || cell.intensityMmH > 4.5;
+
+                return (
+                  <g key={cell.id} className="pointer-events-none">
+                    {/* Soft Radar Splat */}
+                    <circle
+                      cx={`${center.x}%`}
+                      cy={`${center.y}%`}
+                      r={`${rPercent}%`}
+                      fill={isSevere ? 'url(#storm-gradient)' : isWarning ? 'url(#squall-gradient)' : 'url(#drizzle-gradient)'}
+                    />
+                    {/* Concentric Isobar Waves */}
+                    <circle
+                      cx={`${center.x}%`}
+                      cy={`${center.y}%`}
+                      r={`${rPercent * 0.65}%`}
+                      fill="none"
+                      stroke={isSevere ? '#f43f5e' : isWarning ? '#06b6d4' : '#10b981'}
+                      strokeWidth="1"
+                      strokeDasharray="4 4"
+                      strokeOpacity="0.5"
+                    />
+                    <circle
+                      cx={`${center.x}%`}
+                      cy={`${center.y}%`}
+                      r={`${rPercent}%`}
+                      fill="none"
+                      stroke={isSevere ? '#f43f5e' : isWarning ? '#38bdf8' : '#34d399'}
+                      strokeWidth="1.2"
+                      strokeDasharray="6 4"
+                      strokeOpacity="0.65"
+                      className={isSevere ? 'animate-pulse' : ''}
+                    />
+
+                    {/* Radar Center Cell Tag */}
+                    <text
+                      x={`${center.x}%`}
+                      y={`${center.y - rPercent * 0.7}%`}
+                      fill={isSevere ? '#fda4af' : isWarning ? '#67e8f9' : '#6ee7b7'}
+                      fontSize="8"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                      textAnchor="middle"
+                    >
+                      {cell.name.toUpperCase()} ({cell.intensityMmH} mm/h)
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Dynamic Airflow Streamlines Across Airspace */}
+              {[18, 38, 62, 82].map((offsetY, idx) => {
+                const rad = (windData.directionDeg * Math.PI) / 180;
+                const len = 32;
+                const dx = Math.sin(rad) * len;
+                const dy = -Math.cos(rad) * len;
+                const startX = 20 + idx * 18;
+                return (
+                  <g key={`wind-stream-${idx}`} opacity={0.3}>
+                    <line
+                      x1={`${startX}%`}
+                      y1={`${offsetY}%`}
+                      x2={`${startX + dx}%`}
+                      y2={`${offsetY + dy}%`}
+                      stroke="#38bdf8"
+                      strokeWidth="1"
+                      strokeDasharray="5 4"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
         </svg>
+
+        {/* WEATHER LAYER: INTERACTIVE MISSION COORDINATE WEATHER & ALERT BADGES */}
+        {showWeatherLayer &&
+          missionWeatherPoints.map((pt) => {
+            const hasAlert = pt.weather.hasAlert;
+            const isCritical = pt.weather.alertSeverity === 'CRITICAL';
+            const isWarning = pt.weather.alertSeverity === 'WARNING';
+            const isHovered = hoveredWeatherPoint === pt.id;
+
+            return (
+              <div
+                key={pt.id}
+                style={{ left: `${pt.pos.x}%`, top: `${pt.pos.y}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto z-25 cursor-pointer"
+                onMouseEnter={() => setHoveredWeatherPoint(pt.id)}
+                onMouseLeave={() => setHoveredWeatherPoint(null)}
+              >
+                {/* Weather Coordinate Pin Indicator */}
+                <div
+                  className={`relative flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono-numbers backdrop-blur-md border shadow-lg transition-all duration-200 ${
+                    isCritical
+                      ? 'bg-rose-950/90 text-rose-200 border-rose-500 ring-2 ring-rose-500/50 shadow-rose-900/50 scale-105'
+                      : isWarning
+                      ? 'bg-amber-950/90 text-amber-200 border-amber-500 ring-1 ring-amber-500/50 shadow-amber-900/40'
+                      : 'bg-[#081528]/90 text-cyan-300 border-cyan-700/70 hover:border-cyan-400'
+                  }`}
+                >
+                  {/* Wind Direction Arrow Rotated by Heading */}
+                  <span
+                    style={{ transform: `rotate(${pt.weather.windDirectionDeg}deg)` }}
+                    className="inline-block transition-transform duration-500"
+                    title={`Wind from ${pt.weather.windCardinal} (${pt.weather.windDirectionDeg}°)`}
+                  >
+                    <Navigation className="w-2.5 h-2.5 text-cyan-400 fill-cyan-400/40" />
+                  </span>
+
+                  <span className="font-bold">{Math.round(pt.weather.windSpeedKmh)} km/h</span>
+
+                  {/* Precipitation Rate if any */}
+                  {pt.weather.precipitationMmH > 0 && (
+                    <span className="flex items-center gap-0.5 text-cyan-200 border-l border-slate-700 pl-1">
+                      <Droplets className="w-2.5 h-2.5 text-cyan-400" />
+                      <span>{pt.weather.precipitationMmH}m</span>
+                    </span>
+                  )}
+
+                  {/* Pulsing Alert Warning Ping */}
+                  {hasAlert && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isCritical ? 'bg-rose-500 animate-ping' : 'bg-amber-400 animate-pulse'
+                      }`}
+                    />
+                  )}
+                </div>
+
+                {/* Floating Detailed Weather Tooltip on Hover */}
+                {isHovered && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 rounded-xl bg-[#091122]/98 border border-cyan-500/50 shadow-2xl backdrop-blur-lg z-40 text-left pointer-events-none">
+                    <div className="flex items-center justify-between gap-1 pb-1 border-b border-slate-800 text-[10px]">
+                      <span className="font-bold text-white truncate">{pt.label}</span>
+                      <span
+                        className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                          isCritical
+                            ? 'bg-rose-500/20 text-rose-300'
+                            : isWarning
+                            ? 'bg-amber-500/20 text-amber-300'
+                            : 'bg-emerald-500/20 text-emerald-300'
+                        }`}
+                      >
+                        {pt.weather.flightSafety}
+                      </span>
+                    </div>
+
+                    <div className="mt-1.5 space-y-1 text-[9px] text-slate-300 font-mono-numbers">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Wind className="w-2.5 h-2.5 text-cyan-400" /> Wind Speed:
+                        </span>
+                        <span className="font-bold text-white">
+                          {pt.weather.windSpeedKmh} km/h {pt.weather.windCardinal}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Peak Gusts:</span>
+                        <span className="text-amber-300">{pt.weather.gustKmh} km/h</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <CloudRain className="w-2.5 h-2.5 text-cyan-400" /> Rain Rate:
+                        </span>
+                        <span className={pt.weather.precipitationMmH > 0 ? 'text-cyan-300 font-bold' : 'text-slate-400'}>
+                          {pt.weather.precipitationMmH} mm/h ({pt.weather.precipitationType})
+                        </span>
+                      </div>
+                      {pt.weather.alertMessage && (
+                        <div className="mt-1 pt-1 border-t border-slate-800 text-amber-300 font-sans text-[9px] leading-tight">
+                          ⚠️ {pt.weather.alertMessage}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
         {/* Airspace Landmark Pins */}
         {showLandmarks &&
@@ -1580,6 +1986,101 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
             </div>
           </div>
         )}
+
+        {/* Floating Weather Telemetry & Preset Simulation HUD */}
+        {showWeatherLayer && (
+          <div className="absolute bottom-3 right-3 z-20 pointer-events-auto p-2.5 rounded-xl bg-[#070d1a]/92 backdrop-blur-md border border-cyan-800/60 shadow-xl max-w-[310px] transition-all duration-200">
+            <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-slate-800/70 text-[11px]">
+              <div className="flex items-center gap-1.5 font-semibold text-slate-200">
+                <Wind className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Atmospheric Radar & Alerts</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400">Status:</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded font-mono font-bold text-[10px] ${
+                    criticalWeatherAlerts.length > 0
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      : activeWeatherAlerts.length > 0
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  }`}
+                >
+                  {criticalWeatherAlerts.length > 0
+                    ? 'RESTRICTED'
+                    : activeWeatherAlerts.length > 0
+                    ? 'ADVISORY'
+                    : 'SAFE'}
+                </span>
+              </div>
+            </div>
+
+            {/* Atmospheric Metrics Grid */}
+            <div className="grid grid-cols-2 gap-2 mt-2 text-[10px] font-mono-numbers">
+              <div className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800/80">
+                <div className="text-slate-400 text-[9px] flex items-center gap-1">
+                  <Wind className="w-3 h-3 text-cyan-400" />
+                  <span>AMBIENT WIND</span>
+                </div>
+                <div className="text-white font-bold text-xs mt-0.5">
+                  {windData.speedKmh}{' '}
+                  <span className="text-[10px] font-normal text-slate-400">
+                    km/h {windData.directionCardinal}
+                  </span>
+                </div>
+                <div className="text-slate-400 text-[9px]">
+                  Gusts: <strong className="text-amber-300">{windData.gustKmh} km/h</strong>
+                </div>
+              </div>
+
+              <div className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800/80">
+                <div className="text-slate-400 text-[9px] flex items-center gap-1">
+                  <CloudRain className="w-3 h-3 text-cyan-400" />
+                  <span>PRECIPITATION</span>
+                </div>
+                <div className="text-white font-bold text-xs mt-0.5">
+                  {precipitationRadarCells.length > 0
+                    ? `${precipitationRadarCells[0].intensityMmH} mm/h`
+                    : '0.0 mm/h'}
+                </div>
+                <div className="text-slate-400 text-[9px]">
+                  {activeWeatherAlerts.length > 0 ? (
+                    <span className="text-amber-300 font-semibold">
+                      {activeWeatherAlerts.length} Active Alert(s)
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400">All Corridors Clear</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Test Simulation Presets */}
+            <div className="mt-2 pt-1.5 border-t border-slate-800/70 flex items-center justify-between text-[10px]">
+              <span className="text-[9px] text-slate-400">Simulate:</span>
+              <div className="flex items-center gap-1">
+                {WIND_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      windTelemetryService.applyPreset(p.id);
+                      setWeatherPreset(p.id);
+                      setDismissedWeatherAlert(false);
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${
+                      weatherPreset === p.id
+                        ? 'bg-cyan-500/25 text-cyan-200 font-bold border border-cyan-500/50'
+                        : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 border border-slate-800'
+                    }`}
+                    title={`Apply ${p.label}`}
+                  >
+                    {p.id.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Real-Time Live Location Telemetry Ribbon */}
@@ -1620,6 +2121,23 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                   </span>
                 </>
               )}
+              {showWeatherLayer && (
+                <>
+                  <span className="text-slate-500 hidden md:inline">·</span>
+                  <span className="hidden md:inline-flex items-center gap-1 text-[11px] text-cyan-300 font-mono-numbers">
+                    <Wind className="w-3 h-3 text-cyan-400" />
+                    <span>
+                      {
+                        windTelemetryService.getWeatherAtCoordinate(
+                          activeTrackingDrone.currentLocation.latitude,
+                          activeTrackingDrone.currentLocation.longitude
+                        ).windSpeedKmh
+                      }{' '}
+                      km/h
+                    </span>
+                  </span>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1636,6 +2154,26 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                   Avg RSSI:{' '}
                   <strong className={getRssiQuality(avgFleetRssi).color}>
                     {avgFleetRssi} dBm
+                  </strong>
+                </span>
+              </span>
+            </>
+          )}
+          {showWeatherLayer && (
+            <>
+              <span className="text-slate-600">·</span>
+              <span className="flex items-center gap-1 text-slate-300">
+                <CloudRain className="w-3.5 h-3.5 text-cyan-400" />
+                <span>
+                  Squall Max:{' '}
+                  <strong
+                    className={
+                      criticalWeatherAlerts.length > 0 ? 'text-rose-400 font-bold' : 'text-cyan-300'
+                    }
+                  >
+                    {precipitationRadarCells.length > 0
+                      ? `${precipitationRadarCells[0].intensityMmH} mm/h`
+                      : '0 mm/h'}
                   </strong>
                 </span>
               </span>
