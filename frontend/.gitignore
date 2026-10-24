@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.dev.env.json
+.dev.pid
+*.tsbuildinfo
+.npm/
+.cache/
+.DS_Store
+public/assets/
