@@ -36,12 +36,12 @@ stateDiagram-v2
 | CREATED | Mission saved, workflow not started | API (not Workflow) | Proposed (API side) |
 | SCHEDULED | Workflow started, drone being dispatched | Workflow | Tested |
 | IN_PROGRESS | Flying waypoints | Workflow | Tested |
-| SUSPENDED_OFFLINE | Drone offline, Workflow waiting durably (max 5 min) | Workflow | Implemented, test pending |
+| SUSPENDED_OFFLINE | Drone offline, Workflow waiting durably (max 5 min) | Workflow | Tested (entered and still waiting at 4 min) |
 | RECOVERING | Reconnected, validating before resume | Workflow | Implemented, test pending |
 | RETURNING | Going back to base (normal end, abort, or timeout) | Workflow | Tested (normal + abort) |
 | COMPLETED | Delivered and back at base | Workflow | Tested |
 | ABORTED | Operator abort, drone back at base | Workflow | Tested |
-| FAILED | Offline timeout (or return-to-base failure in that path) | Workflow | Implemented, test pending |
+| FAILED | Offline timeout (or return-to-base failure in that path) | Workflow | Tested for timeout + successful return; the "return also failed" branch is not tested |
 
 ## Flows
 
@@ -49,9 +49,9 @@ stateDiagram-v2
 
 **Abort (Tested):** `abortMission` Signal sets a flag. The flag is checked between waypoints. Then RETURNING -> returnToBase -> ABORTED. Reason for returning to base: a drone left mid-air is a safety/asset risk.
 
-**Offline / reconnect (Implemented, test pending):** `droneOffline` -> SUSPENDED_OFFLINE -> `Workflow.await(5 min, reconnected || aborted)` -> reconnect gives RECOVERING -> IN_PROGRESS and the route resumes.
+**Offline / reconnect (Implemented, reconnect test pending):** `droneOffline` -> SUSPENDED_OFFLINE -> `Workflow.await(5 min, reconnected || aborted)` -> reconnect gives RECOVERING -> IN_PROGRESS and the route resumes.
 
-**Offline timeout (Implemented, test pending):** no reconnect in 5 min -> RETURNING -> returnToBase. If it succeeds: FAILED with message "Drone safely returned to base; delivery was not completed." If the Activity fails: FAILED with "return to base also failed."
+**Offline timeout (Tested):** no reconnect in 5 min -> RETURNING -> returnToBase. If it succeeds: FAILED with message "Drone safely returned to base; delivery was not completed." If the Activity fails: FAILED with "return to base also failed."
 
 ## Signals, Query, Activities
 
@@ -78,4 +78,4 @@ Activity options: StartToClose 30 s; retry initial 1 s, max 3 attempts.
 4. Activity bodies are TODO stubs (Trishul: simulator + DB).
 5. 5-minute offline timeout is not confirmed by mentor (`TODO` in code).
 6. Abort audit event is not implemented.
-7. Offline, reconnect, timeout paths have no tests yet; worker-restart test also pending.
+7. Reconnect (RECOVERING), offline-then-abort, duplicate signals and the worker-restart test are still pending. The offline-timeout path is tested (see WORKFLOW_TESTS.md).
