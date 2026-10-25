@@ -14,12 +14,14 @@ public class TemporalConfiguration {
 
     @Bean
     public WorkflowServiceStubs workflowServiceStubs(@Value("${aerosaga.temporal.address}") String address,
-                                                   @Value("${aerosaga.temporal.enabled:false}") boolean enabled) {
+                                                   @Value("${aerosaga.temporal.enabled:true}") boolean enabled) {
         if (!enabled) {
             log.info("Temporal is disabled; skipping service client initialization.");
             return null;
         }
-        return WorkflowServiceStubs.newServiceStubs(WorkflowServiceStubsOptions.newBuilder().setTarget(address).build());
+        return WorkflowServiceStubs.newServiceStubs(
+            WorkflowServiceStubsOptions.newBuilder().setTarget(address).build()
+        );
     }
 
     @Bean
@@ -33,7 +35,7 @@ public class TemporalConfiguration {
     @Bean
     public WorkerFactory workerFactory(WorkflowClient client, MissionActivitiesImpl activities,
                                        @Value("${aerosaga.temporal.task-queue}") String queue,
-                                       @Value("${aerosaga.temporal.enabled:false}") boolean enabled) {
+                                       @Value("${aerosaga.temporal.enabled:true}") boolean enabled) {
         if (!enabled || client == null) {
             log.info("Temporal worker factory is disabled; skipping worker startup.");
             return null;

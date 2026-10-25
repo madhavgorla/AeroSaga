@@ -1,92 +1,209 @@
 package com.aerosaga.temporal;
+
+import com.aerosaga.mission.MissionRequest;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
-import io.temporal.workflow.Workflow;
-import com.aerosaga.mission.MissionRequest;
-import java.time.Duration;
 import io.temporal.failure.ActivityFailure;
-/** Hariom: complete policy, route progression and tests. Keep side effects in Activities. */
+import io.temporal.failure.CanceledFailure;
+import io.temporal.workflow.Workflow;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
+/** Keep mission side effects in activities and workflow decisions deterministic. */
 public class MissionWorkflowImpl implements MissionWorkflow {
- private final MissionActivities activities=Workflow.newActivityStub(MissionActivities.class,
-  ActivityOptions.newBuilder().setStartToCloseTimeout(Duration.ofSeconds(30))
-   .setRetryOptions(RetryOptions.newBuilder().setInitialInterval(Duration.ofSeconds(1)).setMaximumAttempts(3).build()).build());
- private boolean offline,reconnected,aborted;
- private String state="SCHEDULED";
- private static final Duration OFFLINE_TIMEOUT=Duration.ofMinutes(5); //TODO Confirm with mentor.
+    private static final Duration WAYPOINT_INTERVAL = Duration.ofSeconds(1);
+    private static final Duration OFFLINE_TIMEOUT = Duration.ofMinutes(5); // Confirm with mentor before changing.
+    private static final int MAX_WAYPOINTS = 100;
 
- @Override
- public void runMission(MissionWorkflowInput input) {
-  String id = input.missionId();
-  String drone = input.droneId();
+    private final MissionActivities activities = Workflow.newActivityStub(
+        MissionActivities.class,
+        ActivityOptions.newBuilder()
+            .setStartToCloseTimeout(Duration.ofSeconds(30))
+            .setRetryOptions(RetryOptions.newBuilder()
+                .setInitialInterval(Duration.ofSeconds(1))
+                .setMaximumAttempts(3)
+                .build())
+            .build()
+    );
 
-  setState(id, "SCHEDULED", "Workflow started");
-  activities.dispatch(id, drone);
-  setState(id, "IN_PROGRESS", "Drone dispatched");
+    private boolean offline;
+    private boolean reconnected;
+    private boolean aborted;
+    private String state = "SCHEDULED";
+    private List<MissionRequest.WaypointRequest> route = List.of();
+    private int routeRevision;
+    private int transitionNumber;
 
-  int index = 0;
-  for (MissionRequest.WaypointRequest wp : input.waypoints()) {
-   if (mustStop(id, drone)){
-    return;
-   }
-   index++;
-   activities.flyToWaypoint(id, drone, index, wp.latitude(), wp.longitude());
-  }
-  if(mustStop(id, drone)){
-   return;
-  }
+    @Override
+    public void runMission(MissionWorkflowInput input) {
+        route = new ArrayList<>(input.waypoints());
+        try {
+            executeMission(input);
+        } catch (ActivityFailure failure) {
+            if (!isCancellation(failure)) {
+                setState(input, "FAILED", "Mission execution failed after activity retries");
+            }
+            throw failure;
+        }
+    }
 
-  setState(id, "RETURNING", "Delivery complete, returning to base");
-  activities.returnToBase(id, drone);
-  setState(id, "COMPLETED", "Returned to base");
- }
+    private void executeMission(MissionWorkflowInput input) {
+        String missionId = input.missionId();
+        String droneId = input.droneId();
+        setState(input, "SCHEDULED", "Workflow started");
+        activities.dispatch(missionId, droneId);
+        setState(input, "IN_PROGRESS", "Drone dispatched");
 
- private void setState(String missionId, String newState, String message) {
-  this.state = newState;
-  activities.updateBusinessStatus(missionId, newState, message);
- }
+        int waypointIndex = 0;
+        while (waypointIndex < route.size()) {
+            if (mustStop(input)) {
+                return;
+            }
 
- private void handleAbort(String missionId, String droneId) {
-  setState(missionId, "RETURNING", "Abort requested, returning to base");
-  activities.returnToBase(missionId, droneId);
-  setState(missionId, "ABORTED", "Mission aborted, drone back at base");
- }
+            int revisionBeforeWaypoint = routeRevision;
+            MissionRequest.WaypointRequest waypoint = route.get(waypointIndex);
+            activities.flyToWaypoint(
+                missionId, droneId, waypointIndex + 1, waypoint.latitude(), waypoint.longitude()
+            );
+            Workflow.await(WAYPOINT_INTERVAL, () ->
+                offline || reconnected || aborted || routeRevision != revisionBeforeWaypoint
+            );
+            if (aborted) {
+                handleAbort(input);
+                return;
+            }
+            if (routeRevision != revisionBeforeWaypoint) {
+                waypointIndex = 0;
+            } else {
+                waypointIndex++;
+            }
+        }
 
- // true means the mission has ended (aborted or failed) and runMission must stop
- private boolean mustStop(String id, String drone) {
-  if (aborted) {
-   handleAbort(id, drone);
-   return true;
-  }
-  if (offline) {
-   setState(id, "SUSPENDED_OFFLINE", "Drone offline; waiting for reconnect");
-   Workflow.await(OFFLINE_TIMEOUT, () -> reconnected || aborted);
-   if (aborted) {
-    handleAbort(id, drone);
-    return true;
-   }
-   if (!reconnected) {
-    handleOfflineTimeout(id, drone);
-    return true;
-   }
-   setState(id, "RECOVERING", "Drone reconnected; validating");
-   setState(id, "IN_PROGRESS", "Resuming route");
-   offline = false;
-   reconnected = false;
-  }
-  return false;
- }
+        if (mustStop(input)) {
+            return;
+        }
+        setState(input, "RETURNING", "Delivery complete, returning to base");
+        activities.returnToBase(missionId, droneId);
+        setState(input, "COMPLETED", "Returned to base");
+    }
 
- private void handleOfflineTimeout(String id, String drone) {
-  setState(id, "RETURNING", "Reconnect timeout; returning to base");
-  try {
-   activities.returnToBase(id, drone);
-   setState(id, "FAILED", "Mission failed: Drone did not reconnect before timeout. Drone safely returned to base; delivery was not completed.");
-  } catch (ActivityFailure e) {
-   setState(id, "FAILED", "Mission failed: Drone did not reconnect before timeout and return to base also failed.");
-  }
- }
- @Override public void droneOffline(){offline=true;}
- @Override public void droneReconnected(){if(offline) {reconnected = true;} }
- @Override public void abortMission(){aborted=true;}
- @Override public String getMissionState(){return state;}
+    private boolean mustStop(MissionWorkflowInput input) {
+        if (aborted) {
+            handleAbort(input);
+            return true;
+        }
+        if (!offline) {
+            return false;
+        }
+
+        setState(input, "SUSPENDED_OFFLINE", "Drone offline; waiting for reconnect");
+        boolean signalReceived = Workflow.await(OFFLINE_TIMEOUT, () -> reconnected || aborted);
+        if (aborted) {
+            handleAbort(input);
+            return true;
+        }
+        if (!signalReceived) {
+            handleOfflineTimeout(input);
+            return true;
+        }
+
+        offline = false;
+        reconnected = false;
+        setState(input, "RECOVERING", "Drone reconnected; validating");
+        setState(input, "IN_PROGRESS", "Resuming route");
+        return false;
+    }
+
+    private void handleOfflineTimeout(MissionWorkflowInput input) {
+        setState(input, "RETURNING", "Reconnect timeout; returning to base");
+        try {
+            activities.returnToBase(input.missionId(), input.droneId());
+            setState(input, "FAILED",
+                "Mission failed: Drone did not reconnect before timeout. Drone safely returned to base; delivery was not completed.");
+        } catch (ActivityFailure failure) {
+            if (isCancellation(failure)) {
+                throw failure;
+            }
+            setState(input, "FAILED",
+                "Mission failed: Drone did not reconnect before timeout and return to base also failed.");
+        }
+    }
+
+    private void handleAbort(MissionWorkflowInput input) {
+        setState(input, "RETURNING", "Abort requested, returning to base");
+        activities.returnToBase(input.missionId(), input.droneId());
+        setState(input, "ABORTED", "Mission aborted, drone back at base");
+    }
+
+    private void setState(MissionWorkflowInput input, String nextState, String message) {
+        state = nextState;
+        transitionNumber++;
+        activities.updateBusinessStatus(
+            input.missionId(), nextState, message, "status:" + transitionNumber + ":" + nextState
+        );
+    }
+
+    private boolean isCancellation(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof CanceledFailure) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void droneOffline() {
+        offline = true;
+    }
+
+    @Override
+    public void droneReconnected() {
+        if (offline) {
+            reconnected = true;
+        }
+    }
+
+    @Override
+    public void abortMission() {
+        aborted = true;
+    }
+
+    @Override
+    public void reroute(List<MissionRequest.WaypointRequest> waypoints) {
+        validateReroute(waypoints);
+        if (!"IN_PROGRESS".equals(state) || offline || aborted) {
+            throw new IllegalStateException("Mission can only be rerouted while in progress");
+        }
+        route = new ArrayList<>(waypoints);
+        routeRevision++;
+    }
+
+    private void validateReroute(List<MissionRequest.WaypointRequest> waypoints) {
+        if (waypoints == null || waypoints.isEmpty() || waypoints.size() > MAX_WAYPOINTS) {
+            throw new IllegalArgumentException("Reroute must contain between 1 and 100 waypoints");
+        }
+        for (MissionRequest.WaypointRequest waypoint : waypoints) {
+            if (waypoint == null
+                || waypoint.latitude() == null
+                || waypoint.longitude() == null
+                || !Double.isFinite(waypoint.latitude())
+                || !Double.isFinite(waypoint.longitude())
+                || waypoint.latitude() < -90.0
+                || waypoint.latitude() > 90.0
+                || waypoint.longitude() < -180.0
+                || waypoint.longitude() > 180.0) {
+                throw new IllegalArgumentException("Reroute waypoint coordinates are invalid");
+            }
+        }
+    }
+
+    @Override
+    public String getMissionState() {
+        return state;
+    }
 }

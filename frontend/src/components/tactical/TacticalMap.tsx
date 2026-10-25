@@ -264,7 +264,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
     }
 
     const allPts = [...lefts, ...rights];
-    return allPts.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`, '') + ' Z';
+    return allPts.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '') + ' Z';
   };
 
   // Distance from point to line segment
@@ -1213,7 +1213,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
         </div>
 
         {/* SVG Geofence Boundaries, Waypoint Paths & Forbidden Zones */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none">
           <defs>
             <linearGradient id="corridor-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#0284c7" stopOpacity="0.7" />
@@ -1260,7 +1260,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           {forbiddenZones.map((zone) => {
             if (zone.points.length < 3) return null;
             const pathStr =
-              zone.points.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`, '') +
+              zone.points.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '') +
               ' Z';
 
             const hasConflictWithThisZone = pathConflicts.some((c) => c.zoneId === zone.id);
@@ -1393,7 +1393,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
             ];
 
             const pathStr = points.reduce(
-              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`,
+              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`,
               ''
             );
 
@@ -1465,7 +1465,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           {Object.entries(trailMap).map(([droneId, pts]) => {
             if (pts.length < 2) return null;
             const trailPath = pts.reduce(
-              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`,
+              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`,
               ''
             );
             return (
