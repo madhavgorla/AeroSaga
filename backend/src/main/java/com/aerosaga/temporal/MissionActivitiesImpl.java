@@ -44,18 +44,23 @@ public class MissionActivitiesImpl implements MissionActivities {
 
     @Override
     @Transactional
-    public void visitWaypoint(String missionId, int sequence, double latitude, double longitude) {
+    public void flyToWaypoint(
+        String missionId, String droneId, int index, double latitude, double longitude
+    ) {
         MissionEntity mission = requireMission(missionId);
+        if (!mission.getDroneId().equals(droneId)) {
+            throw new IllegalStateException("Mission is assigned to a different drone");
+        }
         BigDecimal lat = BigDecimal.valueOf(latitude);
         BigDecimal lon = BigDecimal.valueOf(longitude);
         mission.setCurrentLocation(lat, lon);
-        DroneEntity drone = requireDrone(mission.getDroneId());
+        DroneEntity drone = requireDrone(droneId);
         drone.setCurrentLocation(lat, lon);
         drone.setLastSeenAt(Instant.now());
         waypoints.findFirstByMissionIdAndLatitudeAndLongitude(missionId, lat, lon)
             .ifPresent(waypoint -> waypoint.setWaypointStatus("COMPLETED"));
-        recordEvent(missionId, "waypoint:" + sequence + ":" + latitude + ":" + longitude,
-            "WAYPOINT_REACHED", "Reached waypoint " + sequence);
+        recordEvent(missionId, "waypoint:" + index + ":" + latitude + ":" + longitude,
+            "WAYPOINT_REACHED", "Reached waypoint " + index);
     }
 
     @Override
