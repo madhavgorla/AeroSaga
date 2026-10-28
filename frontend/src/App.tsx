@@ -20,6 +20,8 @@ import { DroneLocationModal } from './components/drones/DroneLocationModal';
 import { GeminiChatbot } from './components/ai/GeminiChatbot';
 import { LiveVoiceModal } from './components/ai/LiveVoiceModal';
 import { ToastProvider, useToast } from './components/ui/Toast';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { StatusBadge } from './components/ui/StatusBadge';
 import {
   Activity,
   RadioTower,
@@ -36,9 +38,11 @@ import {
   Camera,
   Layers,
   Images,
+  ChevronRight,
 } from 'lucide-react';
 
 function DashboardContent() {
+  const { theme } = useTheme();
   const { showToast } = useToast();
   const [currentTab, setCurrentTab] = useState<string>('overview');
   const [missions, setMissions] = useState<Mission[]>([]);
@@ -238,7 +242,11 @@ function DashboardContent() {
   const availableDronesCount = drones.filter((d) => d.status === 'AVAILABLE').length;
 
   return (
-    <div className="min-h-screen bg-[#080d1a] text-slate-100 flex flex-col">
+    <div
+      className={`min-h-screen flex flex-col transition-colors duration-200 ${
+        theme === 'light' ? 'bg-[#f8fafc] text-slate-900' : 'bg-[#080d1a] text-slate-100'
+      }`}
+    >
       {/* Top Bar with Global Search and Navigation */}
       <Header
         currentTab={currentTab}
@@ -314,13 +322,16 @@ function DashboardContent() {
 
         {/* Main Content Viewport */}
         <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-          {/* Breadcrumb & Tab Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+          {/* Main Page Top Bar: Clean title & live status indicator */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
             <div>
-              <div className="text-[11px] font-mono-numbers text-slate-400 uppercase tracking-wider mb-1">
-                AEROSAGA · AUTONOMOUS DRONE MISSION CONTROL
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">
+                  Airspace Grid Active · Hub Alpha
+                </span>
               </div>
-              <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">
                 {currentTab === 'overview' && 'Fleet Operations Command'}
                 {currentTab === 'missions' && 'Mission Explorer & Timeline'}
                 {currentTab === 'drones' && 'Drone Fleet & Telemetry Signals'}
@@ -329,86 +340,66 @@ function DashboardContent() {
               </h1>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsAIChatOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-200 bg-sky-950/60 border border-sky-700/60 hover:bg-sky-900/60 rounded-lg shadow-sm transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                <span>AI Copilot</span>
-              </button>
-
-              <button
-                onClick={() => setIsLaunchOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New Delivery Mission</span>
-              </button>
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-mono text-slate-400 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg hidden sm:inline">
+                {missions.length} Missions · {drones.length} Drones
+              </span>
             </div>
           </div>
 
-          {/* KPI Summary Metrics Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 transition-colors">
+          {/* Clean KPI Summary Metrics Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-medium text-[11px] uppercase tracking-wider">Total Missions</span>
-                <div className="w-6 h-6 rounded-md bg-sky-500/10 text-sky-400 flex items-center justify-center">
-                  <Activity className="w-3.5 h-3.5" />
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-slate-400">Total Missions</span>
+                <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center">
+                  <Activity className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-white tracking-tight">
+              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-white">
                 {String(missions.length).padStart(2, '0')}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono tabular-nums">
-                Fleet Dispatch Registry
-              </div>
+              <p className="mt-1 text-[11px] text-slate-400">Fleet Dispatch Registry</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 transition-colors">
+            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-medium text-[11px] uppercase tracking-wider">Active Workflows</span>
-                <div className="w-6 h-6 rounded-md bg-sky-500/10 text-sky-400 flex items-center justify-center">
-                  <RadioTower className="w-3.5 h-3.5" />
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-sky-400">Active Workflows</span>
+                <div className="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
+                  <RadioTower className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-sky-400 tracking-tight">
+              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-sky-400">
                 {String(activeWorkflowsCount).padStart(2, '0')}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono tabular-nums">
-                Temporal Engine Active
-              </div>
+              <p className="mt-1 text-[11px] text-slate-400">Temporal Engine Active</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 transition-colors">
+            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-medium text-[11px] uppercase tracking-wider">Offline Suspended</span>
-                <div className="w-6 h-6 rounded-md bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                  <WifiOff className="w-3.5 h-3.5" />
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-amber-400">Suspended / Offline</span>
+                <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
+                  <WifiOff className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-rose-400 tracking-tight">
+              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-amber-400">
                 {String(offlineWaitingCount).padStart(2, '0')}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono tabular-nums">
-                Pending Reconnection
-              </div>
+              <p className="mt-1 text-[11px] text-slate-400">Pending Reconnection</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 transition-colors">
+            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-medium text-[11px] uppercase tracking-wider">Available Drones</span>
-                <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                  <BatteryCharging className="w-3.5 h-3.5" />
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-emerald-400">Available Drones</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                  <BatteryCharging className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-emerald-400 tracking-tight">
+              <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-emerald-400">
                 {String(availableDronesCount).padStart(2, '0')}{' '}
-                <span className="text-sm font-normal text-slate-500">/ {drones.length}</span>
+                <span className="text-xs font-normal text-slate-500">/ {drones.length}</span>
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 font-mono tabular-nums">
-                Ready For Dispatch
-              </div>
+              <p className="mt-1 text-[11px] text-slate-400">Ready at Hub Alpha</p>
             </div>
           </div>
 
@@ -526,40 +517,160 @@ function DashboardContent() {
                 )}
               </div>
 
-              {/* Drones Quick Signal Bar */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <Plane className="w-4 h-4 text-sky-400" />
-                    <span>Drone Fleet & Durable Signal Triggers</span>
-                  </h2>
-                  <span className="text-[11px] font-mono-numbers text-slate-400">
-                    Test Temporal offline/reconnect recovery
-                  </span>
-                </div>
-                <DroneFleetGrid
-                  drones={drones}
-                  onSignalOffline={handleSignalOffline}
-                  onSignalReconnect={handleSignalReconnect}
-                  onSelectMission={(id) => setSelectedMissionId(id)}
-                  onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
-                />
-              </div>
+              {/* Clean Operations Deck: 2-Column Split View */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                {/* Left Column (7 cols): Active Mission Corridors */}
+                <div className="lg:col-span-7 flex flex-col rounded-2xl border border-slate-800/80 bg-slate-900/40 backdrop-blur-md p-4 shadow-sm">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/70">
+                    <div className="flex items-center gap-2">
+                      <RadioTower className="w-4 h-4 text-sky-400" />
+                      <h2 className="text-sm font-bold text-white tracking-tight">
+                        Active Mission Corridors
+                      </h2>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 font-medium">
+                        {missions.filter(m => m.status === 'IN_PROGRESS' || m.status === 'SUSPENDED_OFFLINE').length} Live
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setCurrentTab('missions')}
+                      className="text-xs font-medium text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
+                    >
+                      <span>Explorer</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-              {/* Recent Missions Table */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-slate-200">
-                    Recent Autonomous Missions
-                  </h2>
+                  {/* Clean Mission Cards List */}
+                  <div className="space-y-2.5 flex-1">
+                    {missions.slice(0, 4).map((m) => (
+                      <div
+                        key={m.missionId}
+                        onClick={() => setSelectedMissionId(m.missionId)}
+                        className="p-3 rounded-xl bg-slate-900/70 hover:bg-slate-800/60 border border-slate-800 hover:border-sky-500/40 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-mono font-bold text-sky-400">
+                              {m.missionId}
+                            </span>
+                            <StatusBadge status={m.status} />
+                            <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+                              · Drone: {m.droneId}
+                            </span>
+                          </div>
+                          <div className="text-xs font-medium text-white truncate group-hover:text-sky-200 transition-colors">
+                            {m.destination}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-3">
+                            <span>Waypoints: {m.waypoints?.length || 0}</span>
+                            {m.estimatedArrival && <span>ETA: {m.estimatedArrival}</span>}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 flex items-center gap-1 text-xs text-slate-400 group-hover:text-sky-300 font-medium">
+                          <span className="hidden sm:inline">Details</span>
+                          <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <MissionsTable
-                  missions={missions}
-                  onSelectMission={(id) => setSelectedMissionId(id)}
-                  onAbortMission={(id) => setAbortTargetId(id)}
-                  onRerouteMission={(m) => setRerouteTargetMission(m)}
-                  isBusy={refreshing}
-                />
+
+                {/* Right Column (5 cols): Fleet Telemetry & Fast Signal Triggers */}
+                <div className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-800/80 bg-slate-900/40 backdrop-blur-md p-4 shadow-sm">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/70">
+                    <div className="flex items-center gap-2">
+                      <Plane className="w-4 h-4 text-emerald-400" />
+                      <h2 className="text-sm font-bold text-white tracking-tight">
+                        Fleet Readiness
+                      </h2>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">
+                        {drones.length} Drones
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setCurrentTab('drones')}
+                      className="text-xs font-medium text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
+                    >
+                      <span>Telemetry</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Clean Fleet List with Battery & Signal Controls */}
+                  <div className="space-y-2.5 flex-1">
+                    {drones.map((d) => (
+                      <div
+                        key={d.droneId}
+                        className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  d.status === 'IN_FLIGHT'
+                                    ? 'bg-sky-400 animate-pulse'
+                                    : d.status === 'AVAILABLE'
+                                    ? 'bg-emerald-400'
+                                    : 'bg-rose-400'
+                                }`}
+                              />
+                              <span className="text-xs font-mono font-bold text-white">
+                                {d.droneId}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400">
+                              {d.speedKmh ? `${d.speedKmh} km/h` : 'Standby'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+                            <span className="truncate">{d.model}</span>
+                            <span className="font-mono font-medium text-slate-300">
+                              {d.batteryPercent}%
+                            </span>
+                          </div>
+
+                          {/* Mini Battery Health Bar */}
+                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                d.batteryPercent > 50
+                                  ? 'bg-emerald-400'
+                                  : d.batteryPercent > 20
+                                  ? 'bg-amber-400'
+                                  : 'bg-rose-500'
+                              }`}
+                              style={{ width: `${Math.max(5, d.batteryPercent)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Quick Signal Action */}
+                        <div className="shrink-0 flex items-center pl-2 border-l border-slate-800">
+                          {d.status === 'OFFLINE_WAITING' ? (
+                            <button
+                              onClick={() => handleSignalReconnect(d.droneId)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-[10px] font-medium transition-colors"
+                              title="Reconnect drone"
+                            >
+                              Reconnect
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleSignalOffline(d.droneId)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-950/60 hover:text-rose-400 hover:border-rose-800/60 text-slate-400 border border-slate-700/60 text-[10px] font-medium transition-colors"
+                              title="Simulate signal loss"
+                            >
+                              Signal Cut
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -777,8 +888,10 @@ function DashboardContent() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <DashboardContent />
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <DashboardContent />
+      </ToastProvider>
+    </ThemeProvider>
   );
 }

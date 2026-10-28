@@ -39,6 +39,10 @@ import {
   Thermometer,
   CloudFog,
   AlertCircle,
+  Mountain,
+  ChevronDown,
+  Check,
+  Flame,
 } from 'lucide-react';
 
 export interface ForbiddenZonePoint {
@@ -78,6 +82,8 @@ export const getRssiQuality = (rssi: number): { label: string; color: string; bg
   return { label: 'Weak / Critical', color: 'text-rose-400', bg: '#ef4444' };
 };
 
+export type BaseMapLayer = 'Satellite' | 'Terrain' | 'Blueprint';
+
 interface TacticalMapProps {
   drones: Drone[];
   missions: Mission[];
@@ -86,6 +92,7 @@ interface TacticalMapProps {
   onInspectLocation?: (drone: Drone) => void;
   onAbortMission?: (missionId: string) => void;
   onRerouteMission?: (mission: Mission) => void;
+  initialBaseMapLayer?: BaseMapLayer;
 }
 
 export const TacticalMap: React.FC<TacticalMapProps> = ({
@@ -96,9 +103,37 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
   onInspectLocation,
   onAbortMission,
   onRerouteMission,
+  initialBaseMapLayer = 'Blueprint',
 }) => {
   const { showToast } = useToast();
   const mapCanvasRef = useRef<HTMLDivElement>(null);
+
+  // Base Map Layer ('Satellite', 'Terrain', 'Blueprint')
+  const [baseMapLayer, setBaseMapLayer] = useState<BaseMapLayer>(initialBaseMapLayer);
+  const [isLayerDropdownOpen, setIsLayerDropdownOpen] = useState<boolean>(false);
+  const layerDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close layer dropdown on click-outside or escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (layerDropdownRef.current && !layerDropdownRef.current.contains(e.target as Node)) {
+        setIsLayerDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsLayerDropdownOpen(false);
+      }
+    };
+    if (isLayerDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isLayerDropdownOpen]);
 
   const [hoveredEntity, setHoveredEntity] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'in_flight' | 'offline'>('all');
@@ -111,6 +146,12 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
   const [showRssiHeatmap, setShowRssiHeatmap] = useState<boolean>(true);
   const [rssiHeatmapOpacity, setRssiHeatmapOpacity] = useState<number>(0.65);
   const rssiCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Mission Density & Real-Time Flight Path Congestion Heatmap state
+  const [showDensityHeatmap, setShowDensityHeatmap] = useState<boolean>(true);
+  const [densityHeatmapOpacity, setDensityHeatmapOpacity] = useState<number>(0.75);
+  const densityCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [densityPulseTick, setDensityPulseTick] = useState<number>(0);
 
   // Simulated breach testing state
   const [simulatedBreachedDroneId, setSimulatedBreachedDroneId] = useState<string | null>(null);
@@ -264,7 +305,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
     }
 
     const allPts = [...lefts, ...rights];
-    return allPts.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '') + ' Z';
+    return allPts.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`, '') + ' Z';
   };
 
   // Distance from point to line segment
@@ -475,6 +516,217 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
   const activeMissions = missions.filter((m) =>
     ['IN_PROGRESS', 'SUSPENDED_OFFLINE', 'RECOVERING'].includes(m.status)
   );
+
+  // Animation pulse timer for live congestion flow vectors
+  useEffect(() => {
+    let animId: number;
+    let lastTime = performance.now();
+    const updateTick = (now: number) => {
+      if (now - lastTime >= 50) {
+        setDensityPulseTick((prev) => (prev + 1) % 100);
+        lastTime = now;
+      }
+      animId = requestAnimationFrame(updateTick);
+    };
+    if (showDensityHeatmap) {
+      animId = requestAnimationFrame(updateTick);
+    }
+    return () => cancelAnimationFrame(animId);
+  }, [showDensityHeatmap]);
+
+  // Real-Time Airspace Congestion Index & Density Metrics
+  const inFlightCount = drones.filter((d) => d.status === 'IN_FLIGHT').length;
+  const rawCongestion = Math.min(
+    100,
+    Math.round(
+      activeMissions.length * 15 +
+        inFlightCount * 14 +
+        drones.filter((d) => d.status === 'OFFLINE_WAITING').length * 8
+    )
+  );
+  const congestionScore = Math.max(20, rawCongestion);
+
+  const congestionStatus =
+    congestionScore >= 75
+      ? { label: 'HEAVY CONGESTION', color: 'text-rose-400', bg: 'bg-rose-500/20 border-rose-500/40' }
+      : congestionScore >= 45
+      ? { label: 'MODERATE DENSITY', color: 'text-amber-400', bg: 'bg-amber-500/20 border-amber-500/40' }
+      : { label: 'NOMINAL FLOW', color: 'text-emerald-400', bg: 'bg-emerald-500/20 border-emerald-500/40' };
+
+  const peakCorridor =
+    activeMissions.find((m) => m.waypoints && m.waypoints.length > 1)?.destination ||
+    'Sector 4 Coastal Depot';
+
+  // Render Mission Density & Flight Path Congestion Heatmap onto Canvas
+  useEffect(() => {
+    const canvas = densityCanvasRef.current;
+    if (!canvas || !showDensityHeatmap) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width === 0 || height === 0) return;
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    const hubPixel = {
+      x: (dispatchHub.x / 100) * width,
+      y: (dispatchHub.y / 100) * height,
+    };
+
+    // 1. Draw corridor density heat tubes for all active missions
+    activeMissions.forEach((mission, mIdx) => {
+      const waypoints = mission.waypoints || [];
+      if (waypoints.length === 0) return;
+
+      const pathPoints = [
+        hubPixel,
+        ...waypoints.map((wp) => {
+          const pt = project(wp.latitude, wp.longitude);
+          return {
+            x: (pt.x / 100) * width,
+            y: (pt.y / 100) * height,
+          };
+        }),
+      ];
+
+      // Draw corridor heat envelope for each path segment
+      for (let i = 0; i < pathPoints.length - 1; i++) {
+        const p1 = pathPoints[i];
+        const p2 = pathPoints[i + 1];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist === 0) continue;
+
+        // Draw multiple overlapping radial gradient stamps along the corridor
+        const stepCount = Math.max(8, Math.floor(dist / 14));
+        for (let s = 0; s <= stepCount; s++) {
+          const t = s / stepCount;
+          const cx = p1.x + dx * t;
+          const cy = p1.y + dy * t;
+
+          // Corridor density radius (approx 36-44px wide)
+          const radius = 38;
+          const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, radius);
+
+          // Congestion color based on proximity to Hub or depot
+          const isNearHub = t < 0.25 && i === 0;
+          if (isNearHub) {
+            // High convergence near Dispatch Hub
+            grad.addColorStop(0, 'rgba(239, 68, 68, 0.40)');
+            grad.addColorStop(0.35, 'rgba(249, 115, 22, 0.28)');
+            grad.addColorStop(0.7, 'rgba(234, 179, 8, 0.12)');
+            grad.addColorStop(1, 'rgba(234, 179, 8, 0)');
+          } else {
+            // Standard corridor transit flow
+            grad.addColorStop(0, 'rgba(245, 158, 11, 0.28)');
+            grad.addColorStop(0.4, 'rgba(14, 165, 233, 0.18)');
+            grad.addColorStop(0.8, 'rgba(6, 182, 212, 0.08)');
+            grad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+          }
+
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Draw animated velocity particle pulses along corridor
+        const flowOffset = ((densityPulseTick * 2 + mIdx * 25) % 100) / 100;
+        const flowX = p1.x + dx * flowOffset;
+        const flowY = p1.y + dy * flowOffset;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.85)';
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(flowX, flowY, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+
+    // 2. High-Density Convergence Hotspot at Dispatch Hub Alpha
+    const hubHotspotRadius = 65 + Math.sin(densityPulseTick / 10) * 6;
+    const hubDensityGrad = ctx.createRadialGradient(
+      hubPixel.x,
+      hubPixel.y,
+      4,
+      hubPixel.x,
+      hubPixel.y,
+      hubHotspotRadius
+    );
+    hubDensityGrad.addColorStop(0, 'rgba(239, 68, 68, 0.75)');     // Intense red core
+    hubDensityGrad.addColorStop(0.35, 'rgba(249, 115, 22, 0.50)');  // Warm orange mid
+    hubDensityGrad.addColorStop(0.7, 'rgba(234, 179, 8, 0.25)');    // Amber edge
+    hubDensityGrad.addColorStop(1, 'rgba(234, 179, 8, 0)');
+
+    ctx.fillStyle = hubDensityGrad;
+    ctx.beginPath();
+    ctx.arc(hubPixel.x, hubPixel.y, hubHotspotRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Live In-Flight Drone Dynamic Density Bursts
+    drones.forEach((drone) => {
+      if (drone.status !== 'IN_FLIGHT') return;
+
+      const pt = project(drone.currentLocation.latitude, drone.currentLocation.longitude);
+      const px = (pt.x / 100) * width;
+      const py = (pt.y / 100) * height;
+
+      // High-intensity density kernel around moving drone
+      const droneDensityRadius = 55 + Math.cos(densityPulseTick / 8) * 5;
+      const droneGrad = ctx.createRadialGradient(px, py, 2, px, py, droneDensityRadius);
+      droneGrad.addColorStop(0, 'rgba(239, 68, 68, 0.70)');
+      droneGrad.addColorStop(0.3, 'rgba(249, 115, 22, 0.45)');
+      droneGrad.addColorStop(0.65, 'rgba(234, 179, 8, 0.20)');
+      droneGrad.addColorStop(1, 'rgba(234, 179, 8, 0)');
+
+      ctx.fillStyle = droneGrad;
+      ctx.beginPath();
+      ctx.arc(px, py, droneDensityRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Directional velocity wake along drone heading
+      if (typeof drone.headingDeg === 'number') {
+        const headingRad = ((drone.headingDeg - 90) * Math.PI) / 180;
+        const wakeLength = 28;
+        const wakeX = px - Math.cos(headingRad) * wakeLength;
+        const wakeY = py - Math.sin(headingRad) * wakeLength;
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(251, 146, 60, 0.5)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(wakeX, wakeY);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+
+    // 4. Density Contour Bands (Connecting key corridor convergence zones)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(249, 115, 22, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+
+    // Iso-congestion ring at 2x corridor radius around Hub
+    ctx.beginPath();
+    ctx.arc(hubPixel.x, hubPixel.y, hubHotspotRadius * 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }, [missions, drones, activeMissions, showDensityHeatmap, densityHeatmapOpacity, densityPulseTick]);
 
   // Check for Forbidden Zone Conflicts (Any drone path intersecting a forbidden zone)
   interface PathConflict {
@@ -813,6 +1065,99 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
             <span>Live Airspace</span>
           </div>
 
+          {/* Base Map Layer Dropdown Toggle ('Satellite', 'Terrain', 'Blueprint') */}
+          <div className="relative" ref={layerDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsLayerDropdownOpen((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
+                isLayerDropdownOpen
+                  ? 'bg-sky-950 text-sky-200 border-sky-500 shadow-sm ring-1 ring-sky-500/30'
+                  : 'bg-slate-900 border-slate-700/80 text-slate-200 hover:text-white hover:border-sky-500/50'
+              }`}
+              title="Switch base map layer between 'Satellite', 'Terrain', and 'Blueprint'"
+              aria-haspopup="listbox"
+              aria-expanded={isLayerDropdownOpen}
+              id="base-map-layer-dropdown-btn"
+            >
+              {baseMapLayer === 'Satellite' && <Satellite className="w-3.5 h-3.5 text-cyan-400" />}
+              {baseMapLayer === 'Terrain' && <Mountain className="w-3.5 h-3.5 text-amber-400" />}
+              {baseMapLayer === 'Blueprint' && <Layers className="w-3.5 h-3.5 text-sky-400" />}
+              <span className="text-slate-400 text-[11px]">Layer:</span>
+              <span className="font-semibold text-white font-mono">{baseMapLayer}</span>
+              <ChevronDown
+                className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${
+                  isLayerDropdownOpen ? 'rotate-180 text-sky-300' : ''
+                }`}
+              />
+            </button>
+
+            {isLayerDropdownOpen && (
+              <div
+                className="absolute left-0 top-full mt-1.5 w-64 p-1.5 rounded-xl bg-[#091120]/98 backdrop-blur-xl border border-sky-500/30 shadow-2xl z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                role="listbox"
+                aria-labelledby="base-map-layer-dropdown-btn"
+              >
+                <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800/80 mb-1 flex items-center justify-between">
+                  <span>Base Map Layer</span>
+                  <span className="text-sky-400 font-semibold">{baseMapLayer}</span>
+                </div>
+
+                {(['Satellite', 'Terrain', 'Blueprint'] as BaseMapLayer[]).map((layer) => {
+                  const isSelected = baseMapLayer === layer;
+                  return (
+                    <button
+                      key={layer}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => {
+                        setBaseMapLayer(layer);
+                        setIsLayerDropdownOpen(false);
+                        showToast({
+                          type: 'info',
+                          title: `Map Layer: ${layer}`,
+                          description:
+                            layer === 'Satellite'
+                              ? 'High-res orbital imagery with tarmac runway vectors & river topology.'
+                              : layer === 'Terrain'
+                              ? 'Topographic contour elevation relief & mountain ridge profiles.'
+                              : 'Technical CAD blueprint vector graticule grid & HUD coordinates.',
+                        });
+                      }}
+                      className={`w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors text-xs ${
+                        isSelected
+                          ? 'bg-sky-500/15 text-white border border-sky-500/40 shadow-sm'
+                          : 'text-slate-300 hover:bg-slate-800/70 hover:text-white border border-transparent'
+                      }`}
+                    >
+                      <div
+                        className={`p-1.5 rounded-md mt-0.5 shrink-0 ${
+                          isSelected ? 'bg-sky-500/25 text-sky-300' : 'bg-slate-800/80 text-slate-400'
+                        }`}
+                      >
+                        {layer === 'Satellite' && <Satellite className="w-4 h-4 text-cyan-400" />}
+                        {layer === 'Terrain' && <Mountain className="w-4 h-4 text-amber-400" />}
+                        {layer === 'Blueprint' && <Layers className="w-4 h-4 text-sky-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-white">{layer}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                          {layer === 'Satellite' && 'Orbital imagery, tarmac runways & waterways'}
+                          {layer === 'Terrain' && 'Topographic contours, hypsometric relief & peaks'}
+                          {layer === 'Blueprint' && 'Technical CAD vector grid & aeronautical HUD'}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Geofence Corridor Layer Toggle */}
           <button
             onClick={() => setShowGeofences(!showGeofences)}
@@ -839,6 +1184,33 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           >
             <Radio className="w-3.5 h-3.5 text-emerald-400" />
             <span>RSSI Heatmap</span>
+          </button>
+
+          {/* Mission Density Heatmap Layer Toggle (Flight Path Congestion) */}
+          <button
+            onClick={() => {
+              const next = !showDensityHeatmap;
+              setShowDensityHeatmap(next);
+              showToast({
+                type: 'info',
+                title: next ? 'Mission Density Heatmap Active' : 'Density Heatmap Disabled',
+                description: next
+                  ? `Visualizing real-time flight path congestion (${activeMissions.length} active corridors, ${inFlightCount} in-flight drones).`
+                  : 'Mission density heatmap layer hidden.',
+              });
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+              showDensityHeatmap
+                ? 'bg-amber-950/70 text-amber-300 border-amber-500/60 shadow-sm ring-1 ring-amber-500/30'
+                : 'text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+            title="Toggle real-time flight path congestion and mission density heatmap"
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-400" />
+            <span>Mission Density</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              {congestionScore}%
+            </span>
           </button>
 
           {/* Weather Layer Toggle (Wind Speed & Precipitation Alerts) */}
@@ -1188,9 +1560,13 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
         ref={mapCanvasRef}
         onClick={handleCanvasClick}
         onMouseMove={handleCanvasMouseMove}
-        className={`relative flex-1 w-full h-full overflow-hidden select-none bg-[radial-gradient(ellipse_at_50%_50%,#0f1c33_0%,#050812_85%)] ${
-          isDrawingNFZ ? 'cursor-crosshair' : 'cursor-default'
-        }`}
+        className={`relative flex-1 w-full h-full overflow-hidden select-none transition-colors duration-500 ${
+          baseMapLayer === 'Satellite'
+            ? 'bg-[radial-gradient(ellipse_at_50%_50%,#0e1620_0%,#04070a_88%)]'
+            : baseMapLayer === 'Terrain'
+            ? 'bg-[radial-gradient(ellipse_at_50%_50%,#101b13_0%,#050e07_88%)]'
+            : 'bg-[radial-gradient(ellipse_at_50%_50%,#071936_0%,#030914_88%)]'
+        } ${isDrawingNFZ ? 'cursor-crosshair' : 'cursor-default'}`}
       >
         {/* Signal Strength (RSSI) Heatmap Overlay Canvas */}
         {showRssiHeatmap && (
@@ -1201,26 +1577,130 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           />
         )}
 
-        {/* Radar Range Rings */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-25">
-          <div className="w-[140px] h-[140px] rounded-full border border-sky-400/30" />
-          <div className="w-[280px] h-[280px] rounded-full border border-sky-400/25 absolute" />
-          <div className="w-[420px] h-[420px] rounded-full border border-sky-400/20 absolute" />
-          <div className="w-[560px] h-[560px] rounded-full border border-sky-400/15 absolute" />
-          {/* Crosshairs */}
-          <div className="w-full h-[1px] bg-sky-500/15 absolute" />
-          <div className="h-full w-[1px] bg-sky-500/15 absolute" />
+        {/* Mission Density Heatmap Overlay Canvas (Flight Path Congestion) */}
+        {showDensityHeatmap && (
+          <canvas
+            ref={densityCanvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none z-[1]"
+            style={{ opacity: densityHeatmapOpacity }}
+          />
+        )}
+
+        {/* Dynamic Corner HUD Overlay Indicator */}
+        <div className="absolute bottom-3 right-3 pointer-events-none z-10 px-2.5 py-1 rounded-md bg-[#070e1c]/90 border border-slate-700/60 backdrop-blur-md flex items-center gap-2 text-[10px] font-mono text-slate-300 shadow-lg">
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+          <span>BASE: <strong className="text-white font-semibold">{baseMapLayer.toUpperCase()}</strong></span>
+          <span className="text-slate-500">|</span>
+          {baseMapLayer === 'Blueprint' && <span className="text-sky-300">CAD-VEC WGS84 · 1:25K</span>}
+          {baseMapLayer === 'Satellite' && <span className="text-cyan-300">OPTICAL 0.25M · RECON-04</span>}
+          {baseMapLayer === 'Terrain' && <span className="text-amber-300">TOPO HYPSO · 100M INT</span>}
         </div>
 
-        {/* SVG Geofence Boundaries, Waypoint Paths & Forbidden Zones */}
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none">
+        {/* Radar Range Rings with layer-tuned color accent */}
+        <div
+          className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300 ${
+            baseMapLayer === 'Satellite'
+              ? 'opacity-20'
+              : baseMapLayer === 'Terrain'
+              ? 'opacity-15'
+              : 'opacity-25'
+          }`}
+        >
+          <div
+            className={`w-[140px] h-[140px] rounded-full border ${
+              baseMapLayer === 'Satellite'
+                ? 'border-emerald-400/40'
+                : baseMapLayer === 'Terrain'
+                ? 'border-amber-400/35'
+                : 'border-sky-400/30'
+            }`}
+          />
+          <div
+            className={`w-[280px] h-[280px] rounded-full border absolute ${
+              baseMapLayer === 'Satellite'
+                ? 'border-emerald-400/35'
+                : baseMapLayer === 'Terrain'
+                ? 'border-amber-400/30'
+                : 'border-sky-400/25'
+            }`}
+          />
+          <div
+            className={`w-[420px] h-[420px] rounded-full border absolute ${
+              baseMapLayer === 'Satellite'
+                ? 'border-emerald-400/30'
+                : baseMapLayer === 'Terrain'
+                ? 'border-amber-400/25'
+                : 'border-sky-400/20'
+            }`}
+          />
+          <div
+            className={`w-[560px] h-[560px] rounded-full border absolute ${
+              baseMapLayer === 'Satellite'
+                ? 'border-emerald-400/20'
+                : baseMapLayer === 'Terrain'
+                ? 'border-amber-400/20'
+                : 'border-sky-400/15'
+            }`}
+          />
+          {/* Crosshairs */}
+          <div
+            className={`w-full h-[1px] absolute ${
+              baseMapLayer === 'Satellite'
+                ? 'bg-emerald-500/20'
+                : baseMapLayer === 'Terrain'
+                ? 'bg-amber-500/20'
+                : 'bg-sky-500/15'
+            }`}
+          />
+          <div
+            className={`h-full w-[1px] absolute ${
+              baseMapLayer === 'Satellite'
+                ? 'bg-emerald-500/20'
+                : baseMapLayer === 'Terrain'
+                ? 'bg-amber-500/20'
+                : 'bg-sky-500/15'
+            }`}
+          />
+        </div>
+
+        {/* SVG Geofence Boundaries, Base Map Layer Visuals & Forbidden Zones */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none">
           <defs>
             <linearGradient id="corridor-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#0284c7" stopOpacity="0.7" />
               <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.2" />
             </linearGradient>
 
-            {/* Grid background pattern */}
+            {/* 1. Blueprint Fine CAD Grid Pattern (20x20) */}
+            <pattern id="blueprint-grid-fine" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#0ea5e9" strokeWidth="0.35" strokeOpacity="0.14" />
+            </pattern>
+
+            {/* 2. Blueprint Major CAD Grid Pattern (80x80) with Crosshairs */}
+            <pattern id="blueprint-grid-major" width="80" height="80" patternUnits="userSpaceOnUse">
+              <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#38bdf8" strokeWidth="0.6" strokeOpacity="0.28" />
+              {/* Intersection Crosshairs */}
+              <line x1="0" y1="3" x2="0" y2="-3" stroke="#38bdf8" strokeWidth="1" strokeOpacity="0.4" />
+              <line x1="3" y1="0" x2="-3" y2="0" stroke="#38bdf8" strokeWidth="1" strokeOpacity="0.4" />
+            </pattern>
+
+            {/* 3. Satellite High-Res Orbital Scanline Pattern */}
+            <pattern id="satellite-scan" width="100" height="6" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="100" y2="0" stroke="#38bdf8" strokeWidth="0.5" strokeOpacity="0.04" />
+            </pattern>
+
+            {/* 4. Terrain Topographic Hatch Pattern */}
+            <pattern
+              id="terrain-topo-hatch"
+              width="32"
+              height="32"
+              patternTransform="rotate(30 0 0)"
+              patternUnits="userSpaceOnUse"
+            >
+              <line x1="0" y1="0" x2="0" y2="32" stroke="#10b981" strokeWidth="0.5" strokeOpacity="0.06" />
+            </pattern>
+
+            {/* Standard Grid pattern fallback */}
             <pattern id="grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
               <path
                 d="M 40 0 L 0 0 0 40"
@@ -1254,13 +1734,198 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
             </pattern>
           </defs>
 
-          <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+          {/* ========================================================================= */}
+          {/* BASE MAP LAYER RENDERING: BLUEPRINT / SATELLITE / TERRAIN                 */}
+          {/* ========================================================================= */}
+
+          {/* 1. BLUEPRINT BASE LAYER: Technical CAD Vectors, Fine Grid & Graticules */}
+          {baseMapLayer === 'Blueprint' && (
+            <g id="base-layer-blueprint">
+              <rect width="100%" height="100%" fill="url(#blueprint-grid-fine)" />
+              <rect width="100%" height="100%" fill="url(#blueprint-grid-major)" />
+
+              {/* Technical CAD Corner Alignment Brackets */}
+              <path d="M 12 28 L 12 12 L 28 12" fill="none" stroke="#38bdf8" strokeWidth="1.5" strokeOpacity="0.7" />
+              <path d="M 12 432 L 12 448 L 28 448" fill="none" stroke="#38bdf8" strokeWidth="1.5" strokeOpacity="0.7" />
+
+              {/* Technical Coordinate Graticule Ticks & Labels along perimeter */}
+              <g fill="#38bdf8" fillOpacity="0.5" fontSize="8" fontFamily="monospace">
+                <text x="20%" y="12" textAnchor="middle">LON 80°36'E</text>
+                <text x="40%" y="12" textAnchor="middle">LON 80°38'E</text>
+                <text x="60%" y="12" textAnchor="middle">LON 80°40'E</text>
+                <text x="80%" y="12" textAnchor="middle">LON 80°42'E</text>
+
+                <text x="12" y="25%" textAnchor="start" dominantBaseline="middle">16°32'N</text>
+                <text x="12" y="50%" textAnchor="start" dominantBaseline="middle">16°30'N</text>
+                <text x="12" y="75%" textAnchor="start" dominantBaseline="middle">16°28'N</text>
+              </g>
+
+              {/* Vector CAD Compass Rose in Upper Corner */}
+              <g transform="translate(68, 52)" opacity="0.65">
+                <circle r="16" fill="none" stroke="#38bdf8" strokeWidth="0.8" strokeDasharray="2 2" />
+                <circle r="2" fill="#38bdf8" />
+                <line x1="0" y1="-16" x2="0" y2="16" stroke="#38bdf8" strokeWidth="0.8" />
+                <line x1="-16" y1="0" x2="16" y2="0" stroke="#38bdf8" strokeWidth="0.8" />
+                <polygon points="0,-16 3,-3 -3,-3" fill="#38bdf8" />
+                <text x="0" y="-19" fill="#38bdf8" fontSize="8" fontWeight="bold" fontFamily="monospace" textAnchor="middle">N</text>
+              </g>
+            </g>
+          )}
+
+          {/* 2. SATELLITE BASE LAYER: Orbital Imagery, Tarmac Airfield Runways & Krishna River */}
+          {baseMapLayer === 'Satellite' && (
+            <g id="base-layer-satellite">
+              <rect width="100%" height="100%" fill="url(#satellite-scan)" />
+
+              {/* Organic Krishna River Channel Polygon with depth gradient fill */}
+              <path
+                d="M -10 70% Q 25% 62%, 46% 74% T 82% 64% T 110% 72% L 110% 82% Q 82% 74%, 46% 84% T -10 80% Z"
+                fill="#03223f"
+                fillOpacity="0.85"
+                stroke="#0284c7"
+                strokeWidth="1.2"
+                strokeOpacity="0.5"
+              />
+              {/* River Flow Direction Waves */}
+              <path
+                d="M 5% 74% Q 25% 67%, 46% 78% T 82% 68% T 95% 76%"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="0.8"
+                strokeDasharray="10 8"
+                strokeOpacity="0.4"
+              />
+              <text x="12%" y="74%" fill="#0ea5e9" fontSize="9" fontFamily="monospace" fillOpacity="0.75" fontWeight="bold">
+                ≈ KRISHNA WATERWAY BASIN
+              </text>
+
+              {/* Gannavaram Dispatch Hub Airfield Tarmac & Runways */}
+              {/* Main East-West Runway 09L / 27R */}
+              <g id="runway-09-27">
+                <rect x="42%" y="45.5%" width="25%" height="3.2%" rx="1" fill="#0b131e" stroke="#475569" strokeWidth="1" />
+                {/* Runway Piano Key Thresholds */}
+                <line x1="42.8%" y1="46%" x2="42.8%" y2="48.2%" stroke="#ffffff" strokeWidth="1.2" strokeOpacity="0.8" />
+                <line x1="43.4%" y1="46%" x2="43.4%" y2="48.2%" stroke="#ffffff" strokeWidth="1.2" strokeOpacity="0.8" />
+                <line x1="65.6%" y1="46%" x2="65.6%" y2="48.2%" stroke="#ffffff" strokeWidth="1.2" strokeOpacity="0.8" />
+                <line x1="66.2%" y1="46%" x2="66.2%" y2="48.2%" stroke="#ffffff" strokeWidth="1.2" strokeOpacity="0.8" />
+                {/* Dashed Centerline */}
+                <line x1="44.5%" y1="47.1%" x2="64.5%" y2="47.1%" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="6 5" strokeOpacity="0.85" />
+                {/* Runway Identification Numbers */}
+                <text x="43.8%" y="47.7%" fill="#ffffff" fontSize="8" fontWeight="bold" fontFamily="monospace">09L</text>
+                <text x="64.2%" y="47.7%" fill="#ffffff" fontSize="8" fontWeight="bold" fontFamily="monospace">27R</text>
+              </g>
+
+              {/* Secondary Crosswind Runway 18 / 36 */}
+              <g id="runway-18-36">
+                <rect x="52%" y="36%" width="2.6%" height="22%" rx="1" fill="#0b131e" stroke="#475569" strokeWidth="1" />
+                <line x1="53.3%" y1="37.5%" x2="53.3%" y2="56.5%" stroke="#ffffff" strokeWidth="1.2" strokeDasharray="5 5" strokeOpacity="0.8" />
+                <text x="53.3%" y="38.5%" fill="#ffffff" fontSize="7" fontWeight="bold" fontFamily="monospace" textAnchor="middle">36</text>
+                <text x="53.3%" y="56.5%" fill="#ffffff" fontSize="7" fontWeight="bold" fontFamily="monospace" textAnchor="middle">18</text>
+              </g>
+
+              {/* Airport Apron Ramp & Hangar Staging */}
+              <rect x="47%" y="50%" width="14%" height="4.5%" fill="#0d1726" stroke="#334155" strokeWidth="0.8" rx="2" />
+              <path d="M 46% 48.7% L 46% 52% L 47% 52%" fill="none" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 3" />
+              <text x="54%" y="52.8%" fill="#94a3b8" fontSize="7.5" fontFamily="monospace" textAnchor="middle" fontWeight="semibold">
+                DISPATCH TERMINAL APRON
+              </text>
+            </g>
+          )}
+
+          {/* 3. TERRAIN BASE LAYER: Topographic Hypsometric Contours & Mountain Summits */}
+          {baseMapLayer === 'Terrain' && (
+            <g id="base-layer-terrain">
+              <rect width="100%" height="100%" fill="url(#terrain-topo-hatch)" />
+
+              {/* Lowland Basin Contour (120m) */}
+              <path
+                d="M -10 84% Q 30% 72%, 60% 80% T 110% 74%"
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="1.2"
+                strokeOpacity="0.45"
+                strokeDasharray="6 3"
+              />
+              <text x="6%" y="81%" fill="#10b981" fontSize="8" fontFamily="monospace" fillOpacity="0.8" fontWeight="bold">
+                CONTOUR 120m
+              </text>
+
+              {/* Indrakeeladri Ridge Contour Rings (Western Sector: 280m & 342m) */}
+              <path
+                d="M 12% 40% C 8% 52%, 22% 62%, 34% 54% S 30% 32%, 12% 40% Z"
+                fill="#78350f"
+                fillOpacity="0.1"
+                stroke="#d97706"
+                strokeWidth="1.4"
+                strokeOpacity="0.6"
+              />
+              <text x="21%" y="42%" fill="#d97706" fontSize="8" fontFamily="monospace" fillOpacity="0.85" fontWeight="bold">
+                ELEV 280m
+              </text>
+
+              <path
+                d="M 16% 43% C 13% 49%, 23% 55%, 30% 50% S 26% 37%, 16% 43% Z"
+                fill="#92400e"
+                fillOpacity="0.14"
+                stroke="#b45309"
+                strokeWidth="1.4"
+                strokeOpacity="0.7"
+              />
+              <text x="23%" y="47%" fill="#f59e0b" fontSize="8" fontFamily="monospace" fillOpacity="0.9" fontWeight="bold">
+                ELEV 342m
+              </text>
+
+              {/* Gunadala Hill Contour Sector (Eastern Sector: 284m) */}
+              <path
+                d="M 68% 26% C 60% 34%, 76% 44%, 86% 36% S 80% 18%, 68% 26% Z"
+                fill="#78350f"
+                fillOpacity="0.1"
+                stroke="#d97706"
+                strokeWidth="1.4"
+                strokeOpacity="0.6"
+              />
+              <text x="76%" y="30%" fill="#d97706" fontSize="8" fontFamily="monospace" fillOpacity="0.85" fontWeight="bold">
+                ELEV 284m
+              </text>
+
+              {/* Kondapalli High Peak Summit (North-West Sector: 842m High Altitude) */}
+              <g id="kondapalli-peak">
+                <circle cx="18%" cy="22%" r="36" fill="#451a03" fillOpacity="0.12" stroke="#d97706" strokeWidth="1.2" strokeOpacity="0.55" />
+                <circle cx="18%" cy="22%" r="24" fill="#78350f" fillOpacity="0.18" stroke="#f59e0b" strokeWidth="1.4" strokeOpacity="0.7" />
+                <circle cx="18%" cy="22%" r="12" fill="#b45309" fillOpacity="0.28" stroke="#fbbf24" strokeWidth="1.6" strokeOpacity="0.85" />
+                <text x="18%" y="15%" fill="#fbbf24" fontSize="8" fontFamily="monospace" textAnchor="middle" fontWeight="bold">
+                  ▲ Kondapalli 842m
+                </text>
+              </g>
+
+              {/* Peak Indicators with altitude triangles */}
+              <text x="23%" y="54%" fill="#f59e0b" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                ▲ Indrakeeladri 342m
+              </text>
+              <text x="76%" y="40%" fill="#f59e0b" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                ▲ Gunadala 284m
+              </text>
+
+              {/* Hypsometric Elevation Legend Scale at bottom-left */}
+              <g transform="translate(16, 390)" opacity="0.85">
+                <rect width="130" height="22" rx="4" fill="#09131d" fillOpacity="0.9" stroke="#1e293b" strokeWidth="0.8" />
+                <text x="6" y="9" fill="#94a3b8" fontSize="7" fontFamily="monospace" fontWeight="bold">ELEVATION (MSL)</text>
+                <rect x="6" y="13" width="28" height="4" fill="#10b981" />
+                <rect x="34" y="13" width="28" height="4" fill="#d97706" />
+                <rect x="62" y="13" width="28" height="4" fill="#b45309" />
+                <rect x="90" y="13" width="34" height="4" fill="#fbbf24" />
+                <text x="6" y="23" fill="#64748b" fontSize="6" fontFamily="monospace">0m</text>
+                <text x="60" y="23" fill="#64748b" fontSize="6" fontFamily="monospace">400m</text>
+                <text x="116" y="23" fill="#64748b" fontSize="6" fontFamily="monospace">800m+</text>
+              </g>
+            </g>
+          )}
 
           {/* RENDER FORBIDDEN ZONES (NO-FLY AREAS) */}
           {forbiddenZones.map((zone) => {
             if (zone.points.length < 3) return null;
             const pathStr =
-              zone.points.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '') +
+              zone.points.reduce((acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`, '') +
               ' Z';
 
             const hasConflictWithThisZone = pathConflicts.some((c) => c.zoneId === zone.id);
@@ -1393,7 +2058,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
             ];
 
             const pathStr = points.reduce(
-              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`,
+              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`,
               ''
             );
 
@@ -1465,7 +2130,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
           {Object.entries(trailMap).map(([droneId, pts]) => {
             if (pts.length < 2) return null;
             const trailPath = pts.reduce(
-              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`,
+              (acc, pt, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x}% ${pt.y}%`,
               ''
             );
             return (
@@ -1982,6 +2647,76 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
                     {Math.round(val * 100)}%
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Mission Density & Flight Path Congestion HUD Legend */}
+        {showDensityHeatmap && (
+          <div className="absolute top-14 left-3 z-20 pointer-events-auto p-2.5 rounded-xl bg-[#070e1c]/95 backdrop-blur-md border border-amber-500/40 shadow-xl max-w-[290px] transition-all">
+            <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-800/80 text-[11px]">
+              <div className="flex items-center gap-1.5 font-bold text-white">
+                <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span>Flight Path Congestion</span>
+              </div>
+              <span
+                className={`px-1.5 py-0.2 rounded font-mono font-bold text-[10px] border ${congestionStatus.bg} ${congestionStatus.color}`}
+              >
+                {congestionStatus.label}
+              </span>
+            </div>
+
+            {/* Congestion Metrics */}
+            <div className="mt-2 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-mono-numbers">
+                <span className="text-slate-400 text-[10px]">Airspace Saturation:</span>
+                <span className="text-white font-bold">{congestionScore}%</span>
+              </div>
+
+              {/* Density Gradient Spectrum Bar */}
+              <div className="space-y-1">
+                <div className="h-2 w-full rounded-full bg-gradient-to-r from-cyan-400 via-amber-400 via-orange-500 to-rose-600 shadow-inner" />
+                <div className="flex justify-between items-center text-[9px] font-mono text-slate-400 px-0.5">
+                  <span className="text-cyan-400">Clear (1x)</span>
+                  <span className="text-amber-400">Moderate (2x)</span>
+                  <span className="text-rose-400 font-semibold">Chokepoint (3x+)</span>
+                </div>
+              </div>
+
+              {/* Peak Corridor & In-flight details */}
+              <div className="pt-1.5 border-t border-slate-800/70 text-[10px] text-slate-300 space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Active Corridors:</span>
+                  <span className="font-mono text-sky-300 font-medium">{activeMissions.length} routes</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">In-Flight Aircraft:</span>
+                  <span className="font-mono text-emerald-400 font-medium">{inFlightCount} drones</span>
+                </div>
+                <div className="text-[10px] text-slate-400 truncate mt-1">
+                  Chokepoint: <strong className="text-amber-300 font-medium">{peakCorridor}</strong>
+                </div>
+              </div>
+
+              {/* Opacity Control */}
+              <div className="pt-1.5 border-t border-slate-800/70 flex items-center justify-between text-[10px]">
+                <span className="text-[9px] text-slate-400">Opacity:</span>
+                <div className="flex items-center gap-1">
+                  {[0.4, 0.7, 0.95].map((val) => (
+                    <button
+                      key={val}
+                      onClick={() => setDensityHeatmapOpacity(val)}
+                      className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${
+                        densityHeatmapOpacity === val
+                          ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
+                          : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 border border-slate-800'
+                      }`}
+                    >
+                      {Math.round(val * 100)}%
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

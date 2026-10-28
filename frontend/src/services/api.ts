@@ -7,7 +7,7 @@ import type {
   Waypoint,
 } from '../types';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const DEFAULT_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Initial Simulation Store (Active when Spring Boot backend is starting up or in Dev Demo)
 const INITIAL_DRONES: Drone[] = [
@@ -223,6 +223,7 @@ class ApiService {
   private events: Record<string, MissionEvent[]> = { ...INITIAL_EVENTS };
   private forceMockMode: boolean = false;
   private backendReachable: boolean = false;
+  private activeBaseUrl: string = DEFAULT_BASE_URL;
   private lastHealthCheckTime: number = 0;
 
   constructor() {
@@ -231,7 +232,7 @@ class ApiService {
   }
 
   public getBaseUrl(): string {
-    return BASE_URL;
+    return this.activeBaseUrl || 'http://localhost:8080';
   }
 
   public isUsingMock(): boolean {
@@ -243,23 +244,47 @@ class ApiService {
   }
 
   public async checkBackendHealth(): Promise<HealthResponse> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+    // Avoid rapid re-probing when recently checked and offline
+    if (!this.backendReachable && this.lastHealthCheckTime > 0 && Date.now() - this.lastHealthCheckTime < 10000) {
+      return {
+        status: 'SIMULATED',
+        service: 'aerosaga-simulation-engine',
+        time: new Date().toISOString(),
+      };
+    }
 
-      const res = await fetch(`${BASE_URL}/api/health`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+    const candidates = [
+      this.activeBaseUrl ? `${this.activeBaseUrl}/api/health` : '/api/health',
+      'http://localhost:8080/api/health',
+      'http://127.0.0.1:8080/api/health',
+    ];
 
-      if (res.ok) {
-        const data: HealthResponse = await res.json();
-        this.backendReachable = true;
-        this.lastHealthCheckTime = Date.now();
-        return data;
+    for (const url of Array.from(new Set(candidates))) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        const res = await fetch(url, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+          const data: HealthResponse = await res.json();
+          if (data && (data.status === 'UP' || data.status === 'OK' || data.service)) {
+            this.backendReachable = true;
+            this.lastHealthCheckTime = Date.now();
+            if (url.startsWith('http')) {
+              this.activeBaseUrl = url.replace(/\/api\/health$/, '');
+            } else {
+              this.activeBaseUrl = '';
+            }
+            return data;
+          }
+        }
+      } catch {
+        // Try next candidate endpoint
       }
-    } catch {
-      // Backend not running
     }
 
     this.backendReachable = false;
@@ -274,7 +299,7 @@ class ApiService {
   public async getMissions(): Promise<Mission[]> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/missions`);
+        const res = await fetch(`${this.activeBaseUrl}/api/missions`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -300,7 +325,7 @@ class ApiService {
   public async getMission(missionId: string): Promise<Mission | null> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(missionId)}`);
+        const res = await fetch(`${this.activeBaseUrl}/api/missions/${encodeURIComponent(missionId)}`);
         if (res.ok) {
           const data = await res.json();
           return {
@@ -334,7 +359,7 @@ class ApiService {
 
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/missions`, {
+        const res = await fetch(`${this.activeBaseUrl}/api/missions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(backendPayload),
@@ -414,7 +439,7 @@ class ApiService {
   public async abortMission(missionId: string): Promise<Mission> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(missionId)}/abort`, {
+        const res = await fetch(`${this.activeBaseUrl}/api/missions/${encodeURIComponent(missionId)}/abort`, {
           method: 'POST',
         });
         if (res.ok) {
@@ -456,7 +481,7 @@ class ApiService {
   public async rerouteMission(missionId: string, newWaypoints: Waypoint[]): Promise<Mission> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(missionId)}/reroute`, {
+        const res = await fetch(`${this.activeBaseUrl}/api/missions/${encodeURIComponent(missionId)}/reroute`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ waypoints: newWaypoints }),
@@ -492,7 +517,7 @@ class ApiService {
   public async getMissionEvents(missionId: string): Promise<MissionEvent[]> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(missionId)}/events`);
+        const res = await fetch(`${this.activeBaseUrl}/api/missions/${encodeURIComponent(missionId)}/events`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) return data;
@@ -507,7 +532,7 @@ class ApiService {
   public async getDrones(): Promise<Drone[]> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/drones`);
+        const res = await fetch(`${this.activeBaseUrl}/api/drones`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) return data;
@@ -521,33 +546,36 @@ class ApiService {
 
   // --- LIVE LOCATION API ---
   public async getLiveDroneLocations(): Promise<Drone[]> {
-    try {
-      const res = await fetch('/api/drones/live');
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.drones)) {
-          // Sync with internal drones
-          data.drones.forEach((liveD: any) => {
-            const target = this.drones.find((d) => d.droneId === liveD.droneId);
-            if (target) {
-              target.currentLocation = {
-                latitude: liveD.latitude,
-                longitude: liveD.longitude,
-              };
-              target.speedKmh = liveD.speedKmh;
-              target.altitudeMeters = liveD.altitudeMeters;
-              target.headingDeg = liveD.headingDeg;
-              target.batteryPercent = liveD.batteryPercent;
-              target.satellitesLocked = liveD.satellitesLocked;
-              target.signalRssi = liveD.signalRssi;
-              target.lastHeartbeat = liveD.lastUpdated || new Date().toISOString();
-            }
-          });
-          return [...this.drones];
+    if (this.backendReachable && !this.forceMockMode) {
+      try {
+        const url = this.activeBaseUrl ? `${this.activeBaseUrl}/api/drones/live` : '/api/drones/live';
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.drones)) {
+            // Sync with internal drones
+            data.drones.forEach((liveD: any) => {
+              const target = this.drones.find((d) => d.droneId === liveD.droneId);
+              if (target) {
+                target.currentLocation = {
+                  latitude: liveD.latitude,
+                  longitude: liveD.longitude,
+                };
+                target.speedKmh = liveD.speedKmh;
+                target.altitudeMeters = liveD.altitudeMeters;
+                target.headingDeg = liveD.headingDeg;
+                target.batteryPercent = liveD.batteryPercent;
+                target.satellitesLocked = liveD.satellitesLocked;
+                target.signalRssi = liveD.signalRssi;
+                target.lastHeartbeat = liveD.lastUpdated || new Date().toISOString();
+              }
+            });
+            return [...this.drones];
+          }
         }
+      } catch {
+        // Fallback: client-side simulation step
       }
-    } catch {
-      // Fallback: client-side simulation step
     }
 
     // Client-side simulation step for in-flight drones
@@ -583,7 +611,7 @@ class ApiService {
   public async signalDroneOffline(droneId: string): Promise<{ success: boolean; message: string }> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/drones/${encodeURIComponent(droneId)}/offline`, {
+        const res = await fetch(`${this.activeBaseUrl}/api/drones/${encodeURIComponent(droneId)}/offline`, {
           method: 'POST',
         });
         if (res.ok) {
@@ -631,7 +659,7 @@ class ApiService {
   public async signalDroneReconnected(droneId: string): Promise<{ success: boolean; message: string }> {
     if (!this.isUsingMock()) {
       try {
-        const res = await fetch(`${BASE_URL}/api/drones/${encodeURIComponent(droneId)}/reconnected`, {
+        const res = await fetch(`${this.activeBaseUrl}/api/drones/${encodeURIComponent(droneId)}/reconnected`, {
           method: 'POST',
         });
         if (res.ok) {

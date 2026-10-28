@@ -1,0 +1,6 @@
+{
+  "name": "AeroSaga — Autonomous Drone Mission Control",
+  "description": "Enterprise mission control dashboard for autonomous drone fleets, Temporal workflow orchestration, real-time signal testing, and audit timelines.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

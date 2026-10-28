@@ -10,9 +10,12 @@ import {
   AlertTriangle,
   Battery,
   ArrowRight,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { AuthBar } from '../auth/AuthBar';
 import { GlobalSearchBar } from '../search/GlobalSearchBar';
+import { useTheme } from '../../context/ThemeContext';
 
 interface HeaderProps {
   currentTab: string;
@@ -47,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectMission,
   onFilterStatus,
 }) => {
+  const { theme, toggleTheme } = useTheme();
   const [isAlertDismissed, setIsAlertDismissed] = React.useState(false);
 
   const navItems = [
@@ -163,6 +167,21 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Operator Session Auth */}
           <AuthBar />
+
+          {/* Dark Mode / Light Mode Theme Toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800 transition-all duration-200 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? (
+              <Moon className="w-4 h-4 text-sky-400 hover:text-sky-300 transition-transform duration-200 hover:-rotate-12" />
+            ) : (
+              <Sun className="w-4 h-4 text-amber-500 hover:text-amber-600 transition-transform duration-200 hover:rotate-45" />
+            )}
+          </button>
 
           {/* Refresh button */}
           <button
