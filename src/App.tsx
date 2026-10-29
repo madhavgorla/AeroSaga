@@ -244,7 +244,7 @@ function DashboardContent() {
   return (
     <div
       className={`min-h-screen flex flex-col transition-colors duration-200 ${
-        theme === 'light' ? 'bg-[#f8fafc] text-slate-900' : 'bg-[#080d1a] text-slate-100'
+        theme === 'light' ? 'bg-white text-slate-900' : 'bg-[#080d1a] text-slate-100'
       }`}
     >
       {/* Top Bar with Global Search and Navigation */}

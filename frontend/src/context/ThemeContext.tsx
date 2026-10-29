@@ -24,7 +24,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Fallback if localStorage unavailable
       }
     }
-    return 'dark'; // Default to authentic dark tactical flight operations mode
+    return 'light'; // Default to complete clean white background UI
   });
 
   useEffect(() => {

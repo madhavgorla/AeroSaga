@@ -1051,7 +1051,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
 
   return (
     <div
-      className={`relative w-full h-[460px] lg:h-[520px] bg-[#060a14] rounded-2xl border overflow-hidden flex flex-col shadow-xl transition-all duration-300 ${
+      className={`tactical-map-container relative w-full h-[460px] lg:h-[520px] bg-[#060a14] rounded-2xl border overflow-hidden flex flex-col shadow-xl transition-all duration-300 ${
         hasPathConflict || hasActiveBreach
           ? 'border-red-500/60'
           : 'border-slate-800/80'
@@ -1558,6 +1558,7 @@ export const TacticalMap: React.FC<TacticalMapProps> = ({
       {/* Interactive Tactical Canvas */}
       <div
         ref={mapCanvasRef}
+        data-tactical-canvas="true"
         onClick={handleCanvasClick}
         onMouseMove={handleCanvasMouseMove}
         className={`relative flex-1 w-full h-full overflow-hidden select-none transition-colors duration-500 ${

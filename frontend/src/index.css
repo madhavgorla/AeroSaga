@@ -9,10 +9,15 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #080d1a;
-    color: #e2e8f0;
+    background-color: #ffffff;
+    color: #0f172a;
     min-height: 100vh;
     overflow-x: hidden;
+  }
+
+  html.dark body {
+    background-color: #080d1a;
+    color: #e2e8f0;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -87,13 +92,13 @@ html.light {
 }
 
 html.light body {
-  background-color: #f8fafc !important;
+  background-color: #ffffff !important;
   color: #0f172a !important;
 }
 
 /* Light Mode: Header & Navbar */
 html.light header {
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  background-color: rgba(255, 255, 255, 0.98) !important;
   border-color: #e2e8f0 !important;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
 }
@@ -129,6 +134,7 @@ html.light aside button:hover {
 }
 
 /* Light Mode: Cards, Panels & Containers */
+html.light .bg-slate-900\/40,
 html.light .bg-slate-900\/50,
 html.light .bg-slate-900,
 html.light .bg-slate-900\/60,
@@ -138,11 +144,13 @@ html.light .bg-slate-950,
 html.light .bg-\[\#080d1a\],
 html.light .bg-\[\#080d1a\]\/95,
 html.light .bg-\[\#090e1a\]\/80,
+html.light .bg-\[\#090e1a\]\/90,
 html.light .bg-\[\#090f1f\],
 html.light .bg-\[\#0b1325\],
 html.light .bg-\[\#0b1329\],
 html.light .bg-\[\#070d1a\]\/95,
 html.light .bg-\[\#070e1c\]\/90,
+html.light .bg-\[\#070e1c\]\/95,
 html.light .bg-\[\#0b1322\]\/95,
 html.light .bg-\[\#071322\]\/95,
 html.light .bg-\[\#070b16\],
@@ -270,5 +278,22 @@ html.light ::-webkit-scrollbar-thumb {
 
 html.light ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8 !important;
+}
+
+/* Light Mode: Tactical Map Aeronautical White Chart */
+html.light [data-tactical-canvas] {
+  background: radial-gradient(ellipse at 50% 50%, #ffffff 0%, #f1f5f9 100%) !important;
+}
+
+html.light .tactical-map-container {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light [data-tactical-hud] {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08) !important;
 }
 
