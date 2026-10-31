@@ -17,5 +17,7 @@
 - [x] Offline signal waits durably, then FAILED after 5 min timeout (test)
 - [ ] Reconnect continues recovery
 - [ ] Worker restart test
-- [ ] Retry/timeouts
-- [ ] Reroute
+- [x] Activity failure after retries ends FAILED (test)
+- [ ] Activity timeouts
+- [x] Reroute replaces the route during flight (test)
+- [x] Cancellation does not write FAILED (test)

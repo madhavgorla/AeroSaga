@@ -49,7 +49,7 @@ Both routes require 1–100 waypoints. Latitude must be between -90 and 90, long
 
 ## Workflow behavior
 
-Temporal history is the orchestration source of truth; MySQL stores the mission, current route, drone projection, and deduplicated event timeline. The simulated workflow visits route waypoints at one-second intervals, returns to base, and completes. Offline/reconnect signals pause and resume the workflow; if reconnection does not arrive within ten minutes, the simulated drone returns to base. Abort and reroute are workflow signals. This simulation does not represent live hardware or GPS.
+Temporal history is the orchestration source of truth; MySQL stores the mission, current route, drone projection, and deduplicated event timeline. The simulated workflow visits route waypoints at one-second intervals, returns to base, and completes. Offline/reconnect signals pause and resume the workflow; if reconnection does not arrive within five minutes (to be confirmed with the mentor), the simulated drone returns to base and the mission ends FAILED. Abort and reroute are workflow signals. This simulation does not represent live hardware or GPS.
 
 The workflow-status endpoint returns only the application-owned `workflowId`, mission status, and active flag; it does not return Temporal internals. An active workflow is any status other than `COMPLETED`, `ABORTED`, or `FAILED`.
 
