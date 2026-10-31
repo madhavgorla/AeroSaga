@@ -1,7 +1,7 @@
 # Workflow Tests
 
 File: `backend/src/test/java/com/aerosaga/temporal/MissionWorkflowTest.java`
-Run: `mvn test` (or IntelliJ green arrow). Result on `main` at 929df9c (run on 26 Oct; later commits changed only the frontend): 8 tests, 0 failures (6 in `MissionWorkflowTest` + 2 in `MissionRequestValidationTest`). Tests 1 to 3 were written by Hariom (PR #4); tests 4 to 6 were added by Naveen (PR #5) and reviewed by Hariom.
+Run: `mvn test` (or IntelliJ green arrow). Current suite: 10 tests (8 in `MissionWorkflowTest` + 2 in `MissionRequestValidationTest`), all passing in Hariom's last run on 31 Oct. Tests 1 to 3, 7 and 8 were written by Hariom; tests 4 to 6 were added by Naveen (PR #5) and reviewed by Hariom.
 
 ## How tests are built
 - `TestWorkflowEnvironment` (temporal-testing): in-memory Temporal server, no Docker needed. Time-skipping makes 5-minute timers finish instantly.
@@ -18,8 +18,8 @@ Run: `mvn test` (or IntelliJ green arrow). Result on `main` at 929df9c (run on 2
 | 4 | `rerouteSignalReplacesRemainingWaypointsDuringFlight` | Reroute Signal received during flight replaces the remaining route; the old waypoint is never flown (`never()` check). The new route starts from its first waypoint | Passing |
 | 5 | `activityFailureMarksMissionFailedAndRemainsFailedWorkflow` | Activity failure after 3 retries updates mission status to FAILED, does not mark it COMPLETED, and the Workflow itself ends failed. The event key `status:3:FAILED` depends on the number of transitions, so adding a new state changes it | Passing |
 | 6 | `workflowCancellationDoesNotMarkMissionFailed` | Workflow cancellation is propagated and FAILED is not written. It does not check which state the mission ends in (there is no CANCELLED state yet) | Passing |
-| 7 | offline then reconnect | SUSPENDED_OFFLINE -> RECOVERING -> IN_PROGRESS -> COMPLETED | Pending |
-| 8 | offline then abort | abort wins during wait, ends ABORTED | Pending |
+| 7 | `offlineThenReconnectWithinTimeoutResumesAndCompletes` | Offline at waypoint 1; at 2 min the state is SUSPENDED_OFFLINE; reconnect Signal; waypoint 2 flies (2 flights in total); RECOVERING is written (`status:4`); COMPLETED (`status:7`); FAILED never written. Mutation check: without the reconnect Signal the test fails | Passing |
+| 8 | `offlineThenAbortEndsAbortedWithoutWaitingForTimeout` | Abort Signal at 2 min while offline: returnToBase once, waypoint 2 never flies, ABORTED (`status:5`), FAILED never written. Abort does not wait for the 5-minute timeout. Mutation check: without the abort Signal the test fails | Passing |
 | 9 | duplicate reconnect / reconnect while online | ignored safely | Pending |
 | 10 | Worker restart | history replays, Workflow continues (manual with Temporal UI + docker) | Pending |
 | 11 | Activity StartToClose timeout, and `returnToBase` failing in the offline-timeout path | timeout counts as failure and retries; second message "return to base also failed" | Pending |
@@ -37,4 +37,4 @@ Run: `mvn test` (or IntelliJ green arrow). Result on `main` at 929df9c (run on 2
 - Query is read-only and does not appear in Event History. Signal does ("Workflow Execution Signaled").
 
 ## Update `tests/TEST_PLAN.md`
-Ticked: workflow starts (happy path), abort, offline timeout, reroute, and Activity failure after retries (test 5). Left unticked until each has a passing test or screenshot: reconnect, worker restart, Activity timeouts (test 11).
+Ticked: workflow starts (happy path), abort, offline timeout, reconnect, reroute, Activity failure after retries (test 5) and cancellation. Left unticked until each has a passing test or screenshot: worker restart, Activity timeouts (test 11).

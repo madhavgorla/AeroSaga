@@ -15,7 +15,8 @@
 - [x] Workflow starts (happy path test)
 - [x] Abort returns to base (test)
 - [x] Offline signal waits durably, then FAILED after 5 min timeout (test)
-- [ ] Reconnect continues recovery
+- [x] Reconnect continues recovery (test)
+- [x] Offline then abort ends ABORTED (test)
 - [ ] Worker restart test
 - [x] Activity failure after retries ends FAILED (test)
 - [ ] Activity timeouts

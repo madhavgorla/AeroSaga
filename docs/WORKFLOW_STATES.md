@@ -39,7 +39,7 @@ stateDiagram-v2
 | SCHEDULED | Workflow started, drone being dispatched | Workflow | Tested |
 | IN_PROGRESS | Flying waypoints | Workflow | Tested |
 | SUSPENDED_OFFLINE | Drone offline, Workflow waiting durably (max 5 min) | Workflow | Tested (entered and still waiting at 4 min) |
-| RECOVERING | Reconnected, validating before resume | Workflow | Implemented, test pending |
+| RECOVERING | Reconnected, validating before resume | Workflow | Tested (reconnect within 5 min, test 7) |
 | RETURNING | Going back to base (normal end, abort, or timeout) | Workflow | Tested (normal + abort) |
 | COMPLETED | Delivered and back at base | Workflow | Tested |
 | ABORTED | Operator abort, drone back at base | Workflow | Tested |
@@ -51,7 +51,7 @@ stateDiagram-v2
 
 **Abort (Tested):** `abortMission` Signal sets a flag. The flag is checked between waypoints. Then RETURNING -> returnToBase -> ABORTED. Reason for returning to base: a drone left mid-air is a safety/asset risk.
 
-**Offline / reconnect (Implemented, reconnect test pending):** `droneOffline` -> SUSPENDED_OFFLINE -> `Workflow.await(5 min, reconnected || aborted)` -> reconnect gives RECOVERING -> IN_PROGRESS and the route resumes.
+**Offline / reconnect (Tested):** `droneOffline` -> SUSPENDED_OFFLINE -> `Workflow.await(5 min, reconnected || aborted)` -> reconnect gives RECOVERING -> IN_PROGRESS and the route resumes.
 
 **Reroute (Tested):** `reroute(waypoints)` Signal replaces the route while the mission is IN_PROGRESS. The Workflow validates it (1 to 100 waypoints, latitude -90 to 90, longitude -180 to 180), increases `routeRevision`, and the running waypoint wait wakes up. The new route is flown from its first waypoint. Rejected (exception) if the mission is not IN_PROGRESS, is offline, or is aborted.
 
@@ -83,9 +83,9 @@ Activity options: StartToClose 30 s; retry initial 1 s, max 3 attempts.
 
 1. Offline and abort are noticed only between waypoints, not mid-Activity.
 2. The Workflow tests use mocked Activities, so the Activity bodies (simulator, DB writes) are not covered by these tests.
-3. The 5-minute offline timeout is not confirmed by the mentor (`Confirm with mentor` comment in code). Note: Naveen's earlier branch used 10 minutes.
+3. The 5-minute offline timeout is our own design decision (the mentor did not confirm it). It is one constant (`OFFLINE_TIMEOUT`) in `MissionWorkflowImpl`; if it changes, also update test 3 (4 and 6 minute checks) and these docs.
 4. Reroute restarts from the first waypoint of the new route. This is correct only if the new route starts from the drone's current position. To be confirmed.
 5. `reroute` throws an exception in a Signal handler when the state is wrong. The API layer should check the state first. Not tested at Workflow level (invalid input and wrong state).
 6. There is no CANCELLED state, so a cancelled mission can stay IN_PROGRESS in the database.
 7. Abort audit event is not implemented.
-8. Reconnect (RECOVERING), offline-then-abort, duplicate Signals, Activity timeouts and the worker-restart test are still pending (see WORKFLOW_TESTS.md).
+8. Still pending: duplicate Signals, Activity timeouts, `returnToBase` failing in the timeout path, and the worker-restart demo (see WORKFLOW_TESTS.md). Reconnect and offline-then-abort are now tested.
