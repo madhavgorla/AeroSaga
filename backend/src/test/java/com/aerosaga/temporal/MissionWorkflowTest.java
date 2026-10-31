@@ -140,6 +140,44 @@ class MissionWorkflowTest {
     }
 
     @Test
+    void offlineThenReconnectWithinTimeoutResumesAndCompletes() {
+        MissionWorkflow workflow = newWorkflow("test-mission-7");
+        MissionWorkflow signalWorkflow = client.newWorkflowStub(MissionWorkflow.class, "test-mission-7");
+        MissionWorkflowInput input = input("m7",
+                new MissionRequest.WaypointRequest(25.3, 82.9),
+                new MissionRequest.WaypointRequest(25.4, 83.0));
+
+        doAnswer(invocation -> {
+            signalWorkflow.droneOffline();
+            return null;
+        }).when(activities).flyToWaypoint(
+                eq("m7"), eq("d1"), eq(1), anyDouble(), anyDouble()
+        );
+
+        WorkflowClient.start(workflow::runMission, input);
+
+        env.sleep(Duration.ofMinutes(2));
+        assertEquals("SUSPENDED_OFFLINE", workflow.getMissionState());
+
+        signalWorkflow.droneReconnected();
+        WorkflowStub.fromTyped(workflow).getResult(Void.class);
+
+        verify(activities, times(2)).flyToWaypoint(
+                eq("m7"), eq("d1"), anyInt(), anyDouble(), anyDouble()
+        );
+        verify(activities).returnToBase("m7", "d1");
+        verify(activities).updateBusinessStatus(
+                "m7", "RECOVERING", "Drone reconnected; validating", "status:4:RECOVERING"
+        );
+        verify(activities).updateBusinessStatus(
+                "m7", "COMPLETED", "Returned to base", "status:7:COMPLETED"
+        );
+        verify(activities, never()).updateBusinessStatus(
+                eq("m7"), eq("FAILED"), anyString(), anyString()
+        );
+    }
+
+    @Test
     void rerouteSignalReplacesRemainingWaypointsDuringFlight() {
         MissionWorkflow workflow = newWorkflow("reroute-mission");
         MissionWorkflow signalWorkflow = client.newWorkflowStub(MissionWorkflow.class, "reroute-mission");
