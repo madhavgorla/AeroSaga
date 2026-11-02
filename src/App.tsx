@@ -11,7 +11,6 @@ import { LaunchMissionModal } from './components/missions/LaunchMissionModal';
 import { AbortModal } from './components/missions/AbortModal';
 import { RerouteMissionModal } from './components/missions/RerouteMissionModal';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
-import { DiagnosticsPanel } from './components/diagnostics/DiagnosticsPanel';
 import { DroneCameraFeed } from './components/camera/DroneCameraFeed';
 import { CapturedGalleryGrid } from './components/camera/CapturedGalleryGrid';
 import { capturedImagesService } from './services/capturedImages';
@@ -276,39 +275,6 @@ function DashboardContent() {
         }}
       />
 
-      {/* Sleek, Dismissible Mock Mode Banner */}
-      {isMockMode && !dismissedMockBanner && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 md:px-6 py-1.5 flex items-center justify-between gap-3 text-xs text-amber-200/90 backdrop-blur-sm">
-          <div className="flex items-center gap-2 truncate">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-            <span className="truncate">
-              <strong className="font-semibold text-amber-100">Simulation Mode:</strong> Connected to local fleet telemetry engine (Spring Boot REST API on :8080 offline).
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => {
-                apiService.setForceMock(false);
-                loadData(true);
-              }}
-              className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/30 font-medium text-[11px] transition-colors flex items-center gap-1"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Retry API</span>
-            </button>
-            <button
-              onClick={() => setDismissedMockBanner(true)}
-              className="p-1 rounded text-amber-400 hover:text-white hover:bg-amber-500/20 transition-colors"
-              title="Dismiss banner"
-              aria-label="Dismiss simulation banner"
-            >
-              <span className="text-xs font-bold leading-none">✕</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="flex-1 flex">
         {/* Navigation Sidebar */}
         <Sidebar
@@ -323,83 +289,87 @@ function DashboardContent() {
         {/* Main Content Viewport */}
         <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
           {/* Main Page Top Bar: Clean title & live status indicator */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/60">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">
-                  Airspace Grid Active · Hub Alpha
+                <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 font-bold">
+                  Live Airspace Grid · Dispatch Hub Alpha
                 </span>
               </div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white font-display">
                 {currentTab === 'overview' && 'Fleet Operations Command'}
                 {currentTab === 'missions' && 'Mission Explorer & Timeline'}
                 {currentTab === 'drones' && 'Drone Fleet & Telemetry Signals'}
                 {currentTab === 'analytics' && 'Operational Analytics & KPIs'}
-                {currentTab === 'diagnostics' && 'API Integration & Health'}
               </h1>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs font-mono text-slate-400 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg hidden sm:inline">
-                {missions.length} Missions · {drones.length} Drones
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono-numbers text-slate-300 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-xl shadow-sm flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                <span>{missions.length} Missions</span>
+                <span className="text-slate-500">·</span>
+                <span>{drones.length} Drones</span>
               </span>
             </div>
           </div>
 
           {/* Clean KPI Summary Metrics Row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
+            <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700/80 transition-all shadow-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-semibold text-[11px] uppercase tracking-wider text-slate-400">Total Missions</span>
-                <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center">
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-slate-400">Total Sorties</span>
+                <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center border border-sky-500/20 group-hover:scale-105 transition-transform">
                   <Activity className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-white">
                 {String(missions.length).padStart(2, '0')}
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Fleet Dispatch Registry</p>
+              <p className="mt-1 text-[11px] text-slate-400 font-mono">Registry: 100% Synced</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
+            <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700/80 transition-all shadow-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-semibold text-[11px] uppercase tracking-wider text-sky-400">Active Workflows</span>
-                <div className="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-sky-400">Active Flights</span>
+                <div className="w-8 h-8 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center border border-sky-500/25 group-hover:scale-105 transition-transform">
                   <RadioTower className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-sky-400">
                 {String(activeWorkflowsCount).padStart(2, '0')}
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Temporal Engine Active</p>
+              <p className="mt-1 text-[11px] text-slate-400 font-mono">Temporal Engine Live</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
+            <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700/80 transition-all shadow-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-semibold text-[11px] uppercase tracking-wider text-amber-400">Suspended / Offline</span>
-                <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-amber-400">Alert / Offline</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/25 group-hover:scale-105 transition-transform">
                   <WifiOff className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-amber-400">
                 {String(offlineWaitingCount).padStart(2, '0')}
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Pending Reconnection</p>
+              <p className="mt-1 text-[11px] text-slate-400 font-mono">
+                {offlineWaitingCount === 0 ? 'All Signals Nominal' : 'Signal Link Interrupted'}
+              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm">
+            <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700/80 transition-all shadow-sm group">
               <div className="flex items-center justify-between text-slate-400 text-xs">
-                <span className="font-semibold text-[11px] uppercase tracking-wider text-emerald-400">Available Drones</span>
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-emerald-400">Available Fleet</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center border border-emerald-500/25 group-hover:scale-105 transition-transform">
                   <BatteryCharging className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2 text-2xl lg:text-3xl font-bold font-mono tabular-nums text-emerald-400">
                 {String(availableDronesCount).padStart(2, '0')}{' '}
-                <span className="text-xs font-normal text-slate-500">/ {drones.length}</span>
+                <span className="text-xs font-normal text-slate-500 font-mono">/ {drones.length}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Ready at Hub Alpha</p>
+              <p className="mt-1 text-[11px] text-slate-400 font-mono">Ready for Dispatch</p>
             </div>
           </div>
 
@@ -409,10 +379,11 @@ function DashboardContent() {
               {/* Tactical Airspace Map & Live Optical Gimbal Stream */}
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-800 p-1 rounded-xl">
+                  {/* Segmented Airspace Switcher */}
+                  <div className="flex items-center bg-slate-900/80 border border-slate-800 p-1 rounded-xl shadow-inner">
                     <button
                       onClick={() => setAirspaceView('radar')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         airspaceView === 'radar'
                           ? 'bg-sky-600 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
@@ -424,20 +395,20 @@ function DashboardContent() {
 
                     <button
                       onClick={() => setAirspaceView('camera')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         airspaceView === 'camera'
                           ? 'bg-sky-600 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                       <Camera className="w-3.5 h-3.5" />
-                      <span>Live 4K Camera</span>
+                      <span>Live 4K Feed</span>
                     </button>
 
                     <button
                       onClick={() => setAirspaceView('split')}
-                      className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         airspaceView === 'split'
                           ? 'bg-sky-600 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
@@ -449,20 +420,20 @@ function DashboardContent() {
 
                     <button
                       onClick={() => setAirspaceView('gallery')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         airspaceView === 'gallery'
                           ? 'bg-sky-600 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       <Images className="w-3.5 h-3.5" />
-                      <span>Captured Photos ({capturedImages.length})</span>
+                      <span>Gallery ({capturedImages.length})</span>
                     </button>
                   </div>
 
-                  <div className="text-xs font-mono tabular-nums text-slate-400 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span>Sensor Link: <strong className="text-sky-300 font-medium">{selectedCameraDroneId}</strong></span>
+                  <div className="text-xs font-mono tabular-nums text-slate-300 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Optical Link: <strong className="text-sky-300 font-semibold">{selectedCameraDroneId}</strong></span>
                   </div>
                 </div>
 
@@ -791,19 +762,6 @@ function DashboardContent() {
           {/* Tab 4: Analytics */}
           {currentTab === 'analytics' && (
             <AnalyticsView missions={missions} drones={drones} />
-          )}
-
-          {/* Tab 5: Diagnostics & Backend Integration */}
-          {currentTab === 'diagnostics' && (
-            <DiagnosticsPanel
-              isMockMode={isMockMode}
-              onToggleMockMode={(mock) => {
-                apiService.setForceMock(mock);
-                setIsMockMode(mock);
-                loadData(true);
-              }}
-              onRefresh={() => loadData(true)}
-            />
           )}
         </main>
       </div>
