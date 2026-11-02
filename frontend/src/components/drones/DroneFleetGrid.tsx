@@ -12,25 +12,23 @@ import {
 import {
   Battery,
   BatteryCharging,
-  BatteryWarning,
   Wifi,
   WifiOff,
   Plane,
   Compass,
   ArrowUpRight,
-  ShieldAlert,
   ShieldCheck,
   RotateCcw,
   AlertTriangle,
-  Flame,
-  Timer,
-  Navigation,
-  Gauge,
   MapPin,
   Wind,
-  Activity,
   Sliders,
-  ChevronRight,
+  Check,
+  CheckSquare,
+  Square,
+  X,
+  Loader2,
+  Send,
 } from 'lucide-react';
 
 // Dispatch Hub Alpha Coordinates (Home Waypoint)
@@ -98,81 +96,86 @@ const computePredictiveMetrics = (
     )
   );
 
-  // Wind vector decomposition along the return flight path
+  // Calculate wind components along return flight corridor
   const { headwindKmh, crosswindKmh } = calculateWindComponents(
-    returnBearingDeg,
     wind.speedKmh,
-    wind.directionDeg
+    wind.directionDeg,
+    returnBearingDeg
   );
 
-  // Base nominal airspeed is 45 km/h
-  const nominalAirspeedKmh = 45;
+  // Cruise air speed specification based on drone model
+  const cruiseAirSpeedKmh =
+    drone.model === 'HexaRotor Scout'
+      ? 55
+      : drone.model === 'OctoPayload Cargo'
+      ? 45
+      : 50;
 
-  // Effective return ground speed into headwind (minimum forward penetration 12 km/h)
-  const effectiveReturnSpeedKmh = Math.max(12, nominalAirspeedKmh - headwindKmh);
+  // Ground speed on return corridor adjusted for headwind or tailwind
+  const effectiveReturnSpeedKmh = Math.max(15, cruiseAirSpeedKmh - headwindKmh);
 
-  // Return flight time: transit duration + 2 mins landing and descent approach
-  const transitMinutes = (distToHomeKm / effectiveReturnSpeedKmh) * 60;
-  const timeToHomeMinutes = Math.max(1, Math.round(transitMinutes + 2));
+  // Flight time required to return to Dispatch Hub Alpha
+  const nominalHours = distToHomeKm / cruiseAirSpeedKmh;
+  const nominalTimeToHomeMinutes = Math.round(nominalHours * 60);
 
-  // Nominal return flight time in calm wind (for comparison)
-  const nominalTransitMinutes = (distToHomeKm / nominalAirspeedKmh) * 60;
-  const nominalTimeToHomeMinutes = Math.max(1, Math.round(nominalTransitMinutes + 2));
-  const windDelayMinutes = Math.max(0, timeToHomeMinutes - nominalTimeToHomeMinutes);
+  const windAdjustedHours = distToHomeKm / effectiveReturnSpeedKmh;
+  const timeToHomeMinutes = Math.max(
+    1,
+    Math.round(windAdjustedHours * 60)
+  );
+  const windDelayMinutes = Math.max(
+    0,
+    timeToHomeMinutes - nominalTimeToHomeMinutes
+  );
 
-  // Base consumption rate (% per minute)
-  let baseRate = 0.85;
-  if (drone.status === 'AVAILABLE') baseRate = 0.05;
-  else if (drone.status === 'OFFLINE_WAITING') baseRate = 0.75;
-  else {
-    const speedFactor = ((drone.speedKmh || 45) / 50) * 0.2;
-    const altitudeFactor = ((drone.altitudeMeters || 100) / 100) * 0.1;
-    baseRate = Math.max(0.65, baseRate + speedFactor + altitudeFactor);
-  }
+  // Dynamic discharge rate calculation
+  const isLoaded = Boolean(drone.currentMissionId);
+  const baseBurnRate = isLoaded ? 1.4 : 1.1; // % battery consumed per minute
+  const headwindExtraBurn =
+    headwindKmh > 0 ? (headwindKmh / cruiseAirSpeedKmh) * 0.4 : 0;
+  const burnRatePerMin = Number(
+    (baseBurnRate + headwindExtraBurn).toFixed(2)
+  );
 
-  // Aerodynamic wind resistance power penalty (fighting headwind and crosswind drag)
-  let windPowerMultiplier = 1.0;
-  if (drone.status !== 'AVAILABLE') {
-    const headwindPenalty = Math.max(0, headwindKmh / 35) * 0.55;
-    const crosswindPenalty = (crosswindKmh / 45) * 0.18;
-    windPowerMultiplier = 1.0 + headwindPenalty + crosswindPenalty;
-  }
+  // Battery required for safe return + 10% statutory reserve
+  const rawBatteryNeeded = timeToHomeMinutes * burnRatePerMin;
+  const batteryRequiredForRTB = Math.min(
+    100,
+    Math.round(rawBatteryNeeded + 10)
+  );
 
-  const burnRate = +(baseRate * windPowerMultiplier).toFixed(2);
-  const minutesToEmpty = Math.floor(drone.batteryPercent / Math.max(0.05, burnRate));
+  // Minutes of battery endurance remaining
+  const minutesToEmpty = Math.max(
+    0,
+    Math.floor(drone.batteryPercent / burnRatePerMin)
+  );
+  const tteHours = Math.floor(minutesToEmpty / 60);
+  const tteMins = minutesToEmpty % 60;
+  const formattedTTE =
+    tteHours > 0 ? `${tteHours}h ${tteMins}m` : `${tteMins}m`;
 
-  let formattedTTE = '';
-  if (minutesToEmpty >= 60) {
-    const hrs = Math.floor(minutesToEmpty / 60);
-    const mins = minutesToEmpty % 60;
-    formattedTTE = `${hrs}h ${mins}m`;
-  } else {
-    formattedTTE = `${Math.max(1, minutesToEmpty)} mins`;
-  }
+  // Safety evaluations
+  const canReachHomeSafely = drone.batteryPercent >= batteryRequiredForRTB;
+  const isReturnTimeExceedsBattery = timeToHomeMinutes > minutesToEmpty;
 
-  // Required battery for return flight under wind conditions + 5% emergency safety reserve
-  const batteryRequiredForRTB = Math.ceil(timeToHomeMinutes * burnRate + 5);
-
-  // Core predictive alert criteria:
-  // Does the estimated return flight time exceed remaining battery capacity (minutes to empty)?
-  const isReturnTimeExceedsBattery =
-    drone.status !== 'AVAILABLE' &&
-    (timeToHomeMinutes > minutesToEmpty || drone.batteryPercent < batteryRequiredForRTB);
-
-  const canReachHomeSafely = drone.status === 'AVAILABLE' || !isReturnTimeExceedsBattery;
-
-  const timeDeficitMinutes = Math.max(0, timeToHomeMinutes - minutesToEmpty);
-  const batteryDeficit = Math.max(0, batteryRequiredForRTB - drone.batteryPercent);
+  const batteryDeficit = Math.max(
+    0,
+    batteryRequiredForRTB - drone.batteryPercent
+  );
+  const timeDeficitMinutes = Math.max(
+    0,
+    timeToHomeMinutes - minutesToEmpty
+  );
 
   return {
-    burnRatePerMin: burnRate,
+    burnRatePerMin,
     minutesToEmpty,
     formattedTTE,
-    distToHomeKm: +distToHomeKm.toFixed(2),
+    distToHomeKm: Number(distToHomeKm.toFixed(1)),
     returnBearingDeg,
     headwindKmh,
     crosswindKmh,
-    effectiveReturnSpeedKmh,
+    effectiveReturnSpeedKmh: Math.round(effectiveReturnSpeedKmh),
     timeToHomeMinutes,
     nominalTimeToHomeMinutes,
     windDelayMinutes,
@@ -188,6 +191,10 @@ interface DroneFleetGridProps {
   drones: Drone[];
   onSignalOffline: (droneId: string) => Promise<void>;
   onSignalReconnect: (droneId: string) => Promise<void>;
+  onSignalReturnToHome?: (droneId: string) => Promise<void>;
+  onBulkSignalOffline?: (droneIds: string[]) => Promise<void>;
+  onBulkReturnToHome?: (droneIds: string[]) => Promise<void>;
+  onBulkSignalReconnect?: (droneIds: string[]) => Promise<void>;
   onSelectMission?: (missionId: string) => void;
   onSimulateBatteryDrain?: (droneId: string, percent: number) => void;
   onInspectLocation?: (drone: Drone) => void;
@@ -197,6 +204,10 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
   drones,
   onSignalOffline,
   onSignalReconnect,
+  onSignalReturnToHome,
+  onBulkSignalOffline,
+  onBulkReturnToHome,
+  onBulkSignalReconnect,
   onSelectMission,
   onSimulateBatteryDrain,
   onInspectLocation,
@@ -204,6 +215,10 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
   const { showToast } = useToast();
   const alertedDronesRef = useRef<Set<string>>(new Set());
   const [signalingDrone, setSignalingDrone] = useState<string | null>(null);
+
+  // Checkbox selection state for bulk actions
+  const [selectedDroneIds, setSelectedDroneIds] = useState<Set<string>>(new Set());
+  const [isBulkActing, setIsBulkActing] = useState<boolean>(false);
 
   // Live Wind Telemetry state
   const [wind, setWind] = useState<WindTelemetry>(windTelemetryService.getWind());
@@ -217,7 +232,7 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
     return () => unsubscribe();
   }, []);
 
-  // Predictive Safety Monitor: trigger toast warning whenever return flight time exceeds battery capacity
+  // Predictive Safety Monitor
   useEffect(() => {
     drones.forEach((drone) => {
       if (drone.status === 'AVAILABLE') return;
@@ -239,6 +254,97 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
     });
   }, [drones, wind, showToast]);
 
+  const toggleSelectDrone = (droneId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedDroneIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(droneId)) {
+        next.delete(droneId);
+      } else {
+        next.add(droneId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDroneIds.size === drones.length) {
+      setSelectedDroneIds(new Set());
+    } else {
+      setSelectedDroneIds(new Set(drones.map((d) => d.droneId)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedDroneIds(new Set());
+  };
+
+  const handleBulkReturnToHomeAction = async () => {
+    if (selectedDroneIds.size === 0) return;
+    const ids = Array.from(selectedDroneIds);
+    setIsBulkActing(true);
+    try {
+      if (onBulkReturnToHome) {
+        await onBulkReturnToHome(ids);
+      } else if (onSignalReturnToHome) {
+        await Promise.all(ids.map((id) => onSignalReturnToHome(id)));
+      }
+      setSelectedDroneIds(new Set());
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Bulk RTB Failed',
+        description: err instanceof Error ? err.message : 'Could not execute return to home',
+      });
+    } finally {
+      setIsBulkActing(false);
+    }
+  };
+
+  const handleBulkOfflineAction = async () => {
+    if (selectedDroneIds.size === 0) return;
+    const ids = Array.from(selectedDroneIds);
+    setIsBulkActing(true);
+    try {
+      if (onBulkSignalOffline) {
+        await onBulkSignalOffline(ids);
+      } else {
+        await Promise.all(ids.map((id) => onSignalOffline(id)));
+      }
+      setSelectedDroneIds(new Set());
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Bulk Offline Failed',
+        description: err instanceof Error ? err.message : 'Could not signal offline',
+      });
+    } finally {
+      setIsBulkActing(false);
+    }
+  };
+
+  const handleBulkReconnectAction = async () => {
+    if (selectedDroneIds.size === 0) return;
+    const ids = Array.from(selectedDroneIds);
+    setIsBulkActing(true);
+    try {
+      if (onBulkSignalReconnect) {
+        await onBulkSignalReconnect(ids);
+      } else {
+        await Promise.all(ids.map((id) => onSignalReconnect(id)));
+      }
+      setSelectedDroneIds(new Set());
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Bulk Reconnect Failed',
+        description: err instanceof Error ? err.message : 'Could not reconnect',
+      });
+    } finally {
+      setIsBulkActing(false);
+    }
+  };
+
   const handleOffline = async (droneId: string) => {
     setSignalingDrone(droneId);
     try {
@@ -257,6 +363,16 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
     }
   };
 
+  const handleRTB = async (droneId: string) => {
+    if (!onSignalReturnToHome) return;
+    setSignalingDrone(droneId);
+    try {
+      await onSignalReturnToHome(droneId);
+    } finally {
+      setSignalingDrone(null);
+    }
+  };
+
   // Count drones with wind return deficits
   const windDeficitDrones = drones.filter((d) => {
     if (d.status === 'AVAILABLE') return false;
@@ -265,12 +381,12 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative pb-16">
       {/* Live Atmospheric Wind Telemetry Ribbon */}
-      <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md flex flex-col gap-3">
+      <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md flex flex-col gap-3 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
               <Wind className="w-4 h-4 text-sky-400" />
             </div>
             <div>
@@ -301,7 +417,7 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowWindControls(!showWindControls)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors border ${
                 showWindControls
                   ? 'bg-sky-600 text-white border-sky-500 shadow-sm'
                   : 'bg-slate-900 border-slate-700/80 text-slate-300 hover:text-white hover:border-slate-600'
@@ -354,9 +470,45 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
         )}
       </div>
 
+      {/* Grid Header & Bulk Select Toggle Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-1">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleSelectAll}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${
+              selectedDroneIds.size === drones.length && drones.length > 0
+                ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            {selectedDroneIds.size === drones.length && drones.length > 0 ? (
+              <CheckSquare className="w-4 h-4 text-sky-400" />
+            ) : (
+              <Square className="w-4 h-4 text-slate-400" />
+            )}
+            <span>
+              {selectedDroneIds.size === drones.length
+                ? 'Deselect All'
+                : 'Select All Drones'}
+            </span>
+          </button>
+
+          {selectedDroneIds.size > 0 && (
+            <span className="text-xs font-mono-numbers text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-xl">
+              {selectedDroneIds.size} of {drones.length} Selected
+            </span>
+          )}
+        </div>
+
+        <div className="text-xs font-mono text-slate-400">
+          Click checkbox or card to multi-select for bulk commands
+        </div>
+      </div>
+
       {/* Drone Fleet Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3.5">
         {drones.map((drone) => {
+          const isSelected = selectedDroneIds.has(drone.droneId);
           const isOffline = drone.status === 'OFFLINE_WAITING';
           const isInFlight = drone.status === 'IN_FLIGHT';
           const isBusy = signalingDrone === drone.droneId;
@@ -367,50 +519,70 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
           return (
             <div
               key={drone.droneId}
-              className={`flex flex-col justify-between p-4 rounded-xl border transition-colors bg-[#090e1a]/90 backdrop-blur-sm ${
-                hasDeficit || isCriticalBattery
-                  ? 'border-red-500/60 bg-red-950/20'
+              onClick={() => toggleSelectDrone(drone.droneId)}
+              className={`flex flex-col justify-between p-4 rounded-2xl border transition-all cursor-pointer select-none relative ${
+                isSelected
+                  ? 'ring-2 ring-sky-500 border-sky-400/80 bg-sky-950/30 shadow-lg shadow-sky-950/40'
+                  : hasDeficit || isCriticalBattery
+                  ? 'border-red-500/60 bg-red-950/20 hover:border-red-400/70'
                   : !metrics.canReachHomeSafely
-                  ? 'border-amber-500/50 bg-amber-950/15'
+                  ? 'border-amber-500/50 bg-amber-950/15 hover:border-amber-400/70'
                   : isOffline
-                  ? 'border-rose-800/40'
+                  ? 'border-rose-800/40 bg-slate-900/60 hover:border-rose-700/60'
                   : isInFlight
-                  ? 'border-sky-800/40'
-                  : 'border-slate-800/80 hover:border-slate-700/80'
+                  ? 'border-sky-800/40 bg-slate-900/60 hover:border-sky-700/60'
+                  : 'border-slate-800/80 bg-slate-900/50 hover:border-slate-700/80'
               }`}
             >
               <div>
-                {/* Card Top: Drone ID + Status Badge */}
+                {/* Card Top: Checkbox + Drone ID + Status Badge */}
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold font-mono text-white">
-                        {drone.droneId}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        {drone.model}
-                      </span>
-                    </div>
-
-                    {/* Human-readable place location */}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {/* Custom Styled Checkbox */}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onInspectLocation) onInspectLocation(drone);
-                      }}
-                      className="mt-1 flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300 transition-colors text-left group/place"
-                      title="Inspect place location details"
+                      type="button"
+                      onClick={(e) => toggleSelectDrone(drone.droneId, e)}
+                      className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all shrink-0 ${
+                        isSelected
+                          ? 'bg-sky-600 border-sky-400 text-white shadow-sm'
+                          : 'border-slate-700 bg-slate-900/80 hover:border-sky-500/60 text-transparent'
+                      }`}
+                      title={isSelected ? `Deselect ${drone.droneId}` : `Select ${drone.droneId}`}
+                      aria-label={`Select ${drone.droneId}`}
                     >
-                      <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
-                      <span className="truncate max-w-[170px] underline decoration-sky-500/30 underline-offset-2">
-                        {getNearestPlace(drone.currentLocation.latitude, drone.currentLocation.longitude).formattedLocation}
-                      </span>
+                      <Check className={`w-3.5 h-3.5 transition-opacity ${isSelected ? 'opacity-100 stroke-[3]' : 'opacity-0'}`} />
                     </button>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold font-mono text-white truncate">
+                          {drone.droneId}
+                        </span>
+                        <span className="text-xs text-slate-400 truncate hidden sm:inline">
+                          {drone.model}
+                        </span>
+                      </div>
+
+                      {/* Human-readable place location */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onInspectLocation) onInspectLocation(drone);
+                        }}
+                        className="mt-0.5 flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300 transition-colors text-left group/place"
+                        title="Inspect place location details"
+                      >
+                        <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
+                        <span className="truncate max-w-[150px] underline decoration-sky-500/30 underline-offset-2">
+                          {getNearestPlace(drone.currentLocation.latitude, drone.currentLocation.longitude).formattedLocation}
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Clean Status Indicator */}
                   <span
-                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border ${
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold border shrink-0 ${
                       hasDeficit
                         ? 'text-red-300 bg-red-500/15 border-red-500/30'
                         : isCriticalBattery
@@ -497,7 +669,7 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
                   </div>
                 </div>
 
-                {/* Integrated Flight Telemetry & Return Analytics (Flat, clean, unboxed) */}
+                {/* Integrated Flight Telemetry & Return Analytics */}
                 <div className="mt-3 pt-2.5 border-t border-slate-800/60 grid grid-cols-2 gap-2 text-[11px] font-mono tabular-nums">
                   <div>
                     <span className="text-slate-400 block text-[10px]">Speed / Alt</span>
@@ -542,12 +714,13 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
                 {drone.currentMissionId && (
                   <div className="mt-2.5">
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (onSelectMission && drone.currentMissionId) {
                           onSelectMission(drone.currentMissionId);
                         }
                       }}
-                      className="w-full flex items-center justify-between py-1 px-2 rounded-md bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 text-xs font-mono tabular-nums text-sky-300 hover:text-sky-200 transition-colors group"
+                      className="w-full flex items-center justify-between py-1 px-2 rounded-lg bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 text-xs font-mono tabular-nums text-sky-300 hover:text-sky-200 transition-colors group"
                     >
                       <span className="truncate">Mission: {drone.currentMissionId}</span>
                       <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-300 transition-colors shrink-0" />
@@ -557,32 +730,116 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center gap-2">
+              <div
+                className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {!isOffline ? (
                   <button
                     disabled={isBusy}
                     onClick={() => handleOffline(drone.droneId)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-800/50 transition-colors disabled:opacity-40"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-800/50 transition-colors disabled:opacity-40"
                     title="Simulate drone disconnection signal to Temporal workflow"
                   >
                     <WifiOff className="w-3.5 h-3.5 text-rose-400" />
-                    <span>{isBusy ? 'Signaling...' : 'Simulate Offline'}</span>
+                    <span>{isBusy ? 'Signaling...' : 'Signal Offline'}</span>
                   </button>
                 ) : (
                   <button
                     disabled={isBusy}
                     onClick={() => handleReconnect(drone.droneId)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 transition-colors disabled:opacity-40"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-medium text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 transition-colors disabled:opacity-40"
                     title="Signal drone reconnected to resume Temporal workflow"
                   >
                     <Wifi className="w-3.5 h-3.5 text-emerald-400" />
                     <span>{isBusy ? 'Signaling...' : 'Reconnect'}</span>
                   </button>
                 )}
+
+                {onSignalReturnToHome && (
+                  <button
+                    disabled={isBusy}
+                    onClick={() => handleRTB(drone.droneId)}
+                    className="flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold text-sky-300 hover:text-white bg-sky-950/40 hover:bg-sky-900/60 border border-sky-800/50 transition-colors disabled:opacity-40 shrink-0"
+                    title="Return this drone to Dispatch Hub Alpha"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                    <span>RTB</span>
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* Floating Action Toolbar for Bulk Selection */}
+      <div
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ease-out ${
+          selectedDroneIds.size > 0
+            ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+            : 'opacity-0 translate-y-8 scale-95 pointer-events-none'
+        }`}
+      >
+        <div className="bg-[#090f20]/95 backdrop-blur-xl border border-sky-500/40 shadow-2xl rounded-2xl px-4 py-2.5 flex items-center gap-3 text-xs text-white">
+          {/* Left Count & Clear */}
+          <div className="flex items-center gap-2 pr-3 border-r border-slate-700/80">
+            <div className="w-5 h-5 rounded-full bg-sky-500/20 border border-sky-400/40 text-sky-300 text-[11px] font-bold font-mono flex items-center justify-center">
+              {selectedDroneIds.size}
+            </div>
+            <span className="font-semibold text-slate-200 whitespace-nowrap">
+              {selectedDroneIds.size === 1 ? 'Drone' : 'Drones'} Selected
+            </span>
+            <button
+              onClick={handleClearSelection}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title="Clear selection"
+              aria-label="Clear selection"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Bulk Action Buttons */}
+          <div className="flex items-center gap-2">
+            {/* Return to Home Action */}
+            <button
+              disabled={isBulkActing}
+              onClick={handleBulkReturnToHomeAction}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold transition-all shadow-md active:scale-95 disabled:opacity-50 whitespace-nowrap"
+              title="Command selected drones to Return to Home (RTB)"
+            >
+              {isBulkActing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              <span>Return to Home</span>
+            </button>
+
+            {/* Signal Offline Action */}
+            <button
+              disabled={isBulkActing}
+              onClick={handleBulkOfflineAction}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/70 text-slate-200 hover:text-rose-300 border border-slate-700 hover:border-rose-700/60 transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+              title="Signal offline / simulate signal loss for selected drones"
+            >
+              <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+              <span>Signal Offline</span>
+            </button>
+
+            {/* Reconnect Action */}
+            <button
+              disabled={isBulkActing}
+              onClick={handleBulkReconnectAction}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-950/70 text-slate-200 hover:text-emerald-300 border border-slate-700 hover:border-emerald-700/60 transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+              title="Signal reconnected for selected drones"
+            >
+              <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Reconnect</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

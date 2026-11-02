@@ -722,6 +722,62 @@ class ApiService {
       message: `Reconnected signal handled. ${droneId} workflow resumed.`,
     };
   }
+
+  public async signalReturnToHome(droneId: string): Promise<{ success: boolean; message: string }> {
+    if (!this.isUsingMock()) {
+      try {
+        const res = await fetch(`${this.activeBaseUrl}/api/drones/${encodeURIComponent(droneId)}/rtb`, {
+          method: 'POST',
+        });
+        if (res.ok) {
+          return { success: true, message: `RTB signal acknowledged for ${droneId}.` };
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    const drone = this.drones.find((d) => d.droneId === droneId);
+    if (drone) {
+      drone.status = 'IN_FLIGHT';
+      drone.speedKmh = 52;
+      drone.lastHeartbeat = new Date().toISOString();
+    }
+
+    const activeMission = this.missions.find(
+      (m) => m.droneId === droneId && ['IN_PROGRESS', 'SCHEDULED', 'RECOVERING', 'SUSPENDED_OFFLINE'].includes(m.status)
+    );
+
+    if (activeMission) {
+      activeMission.status = 'RETURNING';
+      activeMission.destination = 'Dispatch Hub Alpha (RTB)';
+      activeMission.waypoints = [
+        {
+          latitude: 16.5062,
+          longitude: 80.648,
+          altitudeMeters: 45,
+          name: 'Hub Alpha Runway 01',
+        },
+      ];
+      activeMission.updatedAt = new Date().toISOString();
+      activeMission.message = 'Return-to-Home commanded by operator. Autonomous RTB corridor engaged.';
+
+      if (!this.events[activeMission.missionId]) this.events[activeMission.missionId] = [];
+      this.events[activeMission.missionId].push({
+        id: `evt-${Date.now()}-rtb`,
+        missionId: activeMission.missionId,
+        timestamp: new Date().toISOString(),
+        eventType: 'RETURNING_TO_BASE',
+        severity: 'info',
+        details: `Operator triggered immediate Return to Home for ${droneId}. Routing directly to Hub Alpha.`,
+      });
+    }
+
+    return {
+      success: true,
+      message: `${droneId} instructed to Return to Home.`,
+    };
+  }
 }
 
 export const apiService = new ApiService();

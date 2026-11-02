@@ -229,6 +229,82 @@ function DashboardContent() {
     }
   };
 
+  // Handle Return to Home (RTB) Command
+  const handleSignalReturnToHome = async (droneId: string) => {
+    try {
+      const res = await apiService.signalReturnToHome(droneId);
+      showToast({
+        type: 'info',
+        title: 'RTB Engaged: Return to Home',
+        description: res.message,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'RTB Command Failed',
+        description: err instanceof Error ? err.message : 'Could not command return to home',
+      });
+    }
+  };
+
+  // Handle Bulk Signal Offline
+  const handleBulkSignalOffline = async (droneIds: string[]) => {
+    try {
+      await Promise.all(droneIds.map((id) => apiService.signalDroneOffline(id)));
+      showToast({
+        type: 'warning',
+        title: `Bulk Signal Sent: ${droneIds.length} Drones Offline`,
+        description: `Simulated signal loss across selected aircraft (${droneIds.join(', ')}).`,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Bulk Signal Failed',
+        description: err instanceof Error ? err.message : 'Could not execute bulk offline',
+      });
+    }
+  };
+
+  // Handle Bulk Return to Home
+  const handleBulkReturnToHome = async (droneIds: string[]) => {
+    try {
+      await Promise.all(droneIds.map((id) => apiService.signalReturnToHome(id)));
+      showToast({
+        type: 'info',
+        title: `Bulk RTB Commanded: ${droneIds.length} Aircraft Returning`,
+        description: `Corridors engaged to Dispatch Hub Alpha for ${droneIds.join(', ')}.`,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Bulk RTB Failed',
+        description: err instanceof Error ? err.message : 'Could not command bulk return to home',
+      });
+    }
+  };
+
+  // Handle Bulk Reconnect
+  const handleBulkSignalReconnect = async (droneIds: string[]) => {
+    try {
+      await Promise.all(droneIds.map((id) => apiService.signalDroneReconnected(id)));
+      showToast({
+        type: 'success',
+        title: `Bulk Reconnected: ${droneIds.length} Drones Online`,
+        description: `Telemetry signals restored for ${droneIds.join(', ')}.`,
+      });
+      await loadData();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Bulk Reconnect Failed',
+        description: err instanceof Error ? err.message : 'Could not reconnect selected drones',
+      });
+    }
+  };
+
   // Statistics
   const activeWorkflowsCount = missions.filter((m) =>
     ['SCHEDULED', 'IN_PROGRESS', 'RECOVERING', 'RETURNING'].includes(m.status)
@@ -619,7 +695,7 @@ function DashboardContent() {
                         </div>
 
                         {/* Quick Signal Action */}
-                        <div className="shrink-0 flex items-center pl-2 border-l border-slate-800">
+                        <div className="shrink-0 flex items-center gap-1.5 pl-2 border-l border-slate-800">
                           {d.status === 'OFFLINE_WAITING' ? (
                             <button
                               onClick={() => handleSignalReconnect(d.droneId)}
@@ -637,6 +713,13 @@ function DashboardContent() {
                               Signal Cut
                             </button>
                           )}
+                          <button
+                            onClick={() => handleSignalReturnToHome(d.droneId)}
+                            className="px-2 py-1 rounded-lg bg-sky-950/40 hover:bg-sky-900/60 text-sky-400 hover:text-white border border-sky-800/50 text-[10px] font-semibold transition-colors"
+                            title="Command Return to Home (RTB)"
+                          >
+                            RTB
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -675,6 +758,10 @@ function DashboardContent() {
                 drones={drones}
                 onSignalOffline={handleSignalOffline}
                 onSignalReconnect={handleSignalReconnect}
+                onSignalReturnToHome={handleSignalReturnToHome}
+                onBulkSignalOffline={handleBulkSignalOffline}
+                onBulkReturnToHome={handleBulkReturnToHome}
+                onBulkSignalReconnect={handleBulkSignalReconnect}
                 onSelectMission={(id) => setSelectedMissionId(id)}
                 onInspectLocation={(drone) => setInspectedLocationDrone(drone)}
               />
