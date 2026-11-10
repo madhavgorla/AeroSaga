@@ -29,6 +29,7 @@ import {
   X,
   Loader2,
   Send,
+  Wrench,
 } from 'lucide-react';
 
 // Dispatch Hub Alpha Coordinates (Home Waypoint)
@@ -380,6 +381,13 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
     return m.isReturnTimeExceedsBattery;
   });
 
+  // Count drones exceeding flight time maintenance threshold
+  const maintenanceDueDrones = drones.filter((d) => {
+    const flightHours = d.totalFlightHours ?? 0;
+    const thresholdHours = d.maintenanceThresholdHours ?? 100;
+    return flightHours >= thresholdHours;
+  });
+
   return (
     <div className="space-y-4 relative pb-16">
       {/* Live Atmospheric Wind Telemetry Ribbon */}
@@ -400,6 +408,12 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
                 {windDeficitDrones.length > 0 && (
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/15 text-red-300 border border-red-500/30">
                     {windDeficitDrones.length} RTB Wind Deficit
+                  </span>
+                )}
+                {maintenanceDueDrones.length > 0 && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    <Wrench className="w-3 h-3 text-amber-400" />
+                    <span>{maintenanceDueDrones.length} Maintenance Due</span>
                   </span>
                 )}
               </div>
@@ -498,6 +512,13 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
               {selectedDroneIds.size} of {drones.length} Selected
             </span>
           )}
+
+          {maintenanceDueDrones.length > 0 && (
+            <span className="flex items-center gap-1.5 text-xs font-mono text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-xl">
+              <Wrench className="w-3.5 h-3.5 text-amber-400" />
+              <span>{maintenanceDueDrones.length} {maintenanceDueDrones.length === 1 ? 'Drone Requires' : 'Drones Require'} Maintenance</span>
+            </span>
+          )}
         </div>
 
         <div className="text-xs font-mono text-slate-400">
@@ -516,6 +537,13 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
           const metrics = computePredictiveMetrics(drone, wind);
           const hasDeficit = metrics.isReturnTimeExceedsBattery;
 
+          // Operational flight hours & maintenance threshold defined in drone object
+          const flightHours = drone.totalFlightHours ?? 0;
+          const thresholdHours = drone.maintenanceThresholdHours ?? 100;
+          const isMaintenanceDue = flightHours >= thresholdHours;
+          const isNearMaintenance = !isMaintenanceDue && flightHours >= thresholdHours * 0.9;
+          const flightUsagePercent = Math.min(100, Math.round((flightHours / thresholdHours) * 100));
+
           return (
             <div
               key={drone.droneId}
@@ -525,6 +553,8 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
                   ? 'ring-2 ring-sky-500 border-sky-400/80 bg-sky-950/30 shadow-lg shadow-sky-950/40'
                   : hasDeficit || isCriticalBattery
                   ? 'border-red-500/60 bg-red-950/20 hover:border-red-400/70'
+                  : isMaintenanceDue
+                  ? 'border-amber-500/80 bg-slate-900/80 hover:border-amber-400/90 shadow-md shadow-amber-950/30 ring-1 ring-amber-500/40'
                   : !metrics.canReachHomeSafely
                   ? 'border-amber-500/50 bg-amber-950/15 hover:border-amber-400/70'
                   : isOffline
@@ -580,49 +610,70 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
                     </div>
                   </div>
 
-                  {/* Clean Status Indicator */}
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold border shrink-0 ${
-                      hasDeficit
-                        ? 'text-red-300 bg-red-500/15 border-red-500/30'
-                        : isCriticalBattery
-                        ? 'text-red-300 bg-red-500/15 border-red-500/30'
-                        : !metrics.canReachHomeSafely
-                        ? 'text-amber-300 bg-amber-500/15 border-amber-500/30'
-                        : isOffline
-                        ? 'text-rose-300 bg-rose-500/10 border-rose-500/20'
-                        : isInFlight
-                        ? 'text-sky-300 bg-sky-500/10 border-sky-500/20'
-                        : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
-                    }`}
-                  >
+                  {/* Clean Status & Maintenance Warning Indicators */}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        hasDeficit || isCriticalBattery
-                          ? 'bg-red-400'
+                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold border ${
+                        hasDeficit
+                          ? 'text-red-300 bg-red-500/15 border-red-500/30'
+                          : isCriticalBattery
+                          ? 'text-red-300 bg-red-500/15 border-red-500/30'
                           : !metrics.canReachHomeSafely
-                          ? 'bg-amber-400'
+                          ? 'text-amber-300 bg-amber-500/15 border-amber-500/30'
                           : isOffline
-                          ? 'bg-rose-400'
+                          ? 'text-rose-300 bg-rose-500/10 border-rose-500/20'
                           : isInFlight
-                          ? 'bg-sky-400'
-                          : 'bg-emerald-400'
+                          ? 'text-sky-300 bg-sky-500/10 border-sky-500/20'
+                          : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
                       }`}
-                    />
-                    <span>
-                      {hasDeficit
-                        ? 'Wind Deficit'
-                        : isCriticalBattery
-                        ? 'Low Battery'
-                        : !metrics.canReachHomeSafely
-                        ? 'Unsafe RTB'
-                        : isOffline
-                        ? 'Offline'
-                        : isInFlight
-                        ? 'In Flight'
-                        : 'Available'}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          hasDeficit || isCriticalBattery
+                            ? 'bg-red-400'
+                            : !metrics.canReachHomeSafely
+                            ? 'bg-amber-400'
+                            : isOffline
+                            ? 'bg-rose-400'
+                            : isInFlight
+                            ? 'bg-sky-400'
+                            : 'bg-emerald-400'
+                        }`}
+                      />
+                      <span>
+                        {hasDeficit
+                          ? 'Wind Deficit'
+                          : isCriticalBattery
+                          ? 'Low Battery'
+                          : !metrics.canReachHomeSafely
+                          ? 'Unsafe RTB'
+                          : isOffline
+                          ? 'Offline'
+                          : isInFlight
+                          ? 'In Flight'
+                          : 'Available'}
+                      </span>
                     </span>
-                  </span>
+
+                    {/* Maintenance Warning Indicator Badge */}
+                    {isMaintenanceDue ? (
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm animate-pulse"
+                        title={`Maintenance Overhaul Required: Flight hours (${flightHours}h) exceed the configured threshold of ${thresholdHours}h`}
+                      >
+                        <Wrench className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span>Maint. Due ({flightHours}h/{thresholdHours}h)</span>
+                      </span>
+                    ) : isNearMaintenance ? (
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-medium bg-amber-500/10 text-amber-400/90 border border-amber-500/25"
+                        title={`Service Inspection Approaching: ${flightHours}h / ${thresholdHours}h threshold`}
+                      >
+                        <Wrench className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                        <span>Service Soon</span>
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 {/* Battery Meter */}
@@ -668,6 +719,59 @@ export const DroneFleetGrid: React.FC<DroneFleetGridProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* Airframe Flight Time & Maintenance Threshold */}
+                <div className="mt-2.5 space-y-1">
+                  <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+                    <span className="text-slate-400 text-[11px] flex items-center gap-1">
+                      <Wrench className={`w-3.5 h-3.5 ${isMaintenanceDue ? 'text-amber-400' : 'text-slate-400'}`} />
+                      <span>Flight Hours</span>
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`font-semibold ${
+                          isMaintenanceDue
+                            ? 'text-amber-400'
+                            : isNearMaintenance
+                            ? 'text-amber-300'
+                            : 'text-slate-300'
+                        }`}
+                      >
+                        {flightHours}h
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        / {thresholdHours}h limit
+                      </span>
+                      {isMaintenanceDue && (
+                        <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-1 py-0.2 rounded border border-amber-500/30">
+                          +{flightHours - thresholdHours}h OVER
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        isMaintenanceDue
+                          ? 'bg-amber-500'
+                          : isNearMaintenance
+                          ? 'bg-amber-400'
+                          : 'bg-sky-500'
+                      }`}
+                      style={{ width: `${Math.min(100, flightUsagePercent)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Maintenance Warning Banner if Exceeded */}
+                {isMaintenanceDue && (
+                  <div className="mt-2 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 font-medium">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="truncate">Service Overhaul Required ({flightHours}h &gt; {thresholdHours}h limit)</span>
+                  </div>
+                )}
 
                 {/* Integrated Flight Telemetry & Return Analytics */}
                 <div className="mt-3 pt-2.5 border-t border-slate-800/60 grid grid-cols-2 gap-2 text-[11px] font-mono tabular-nums">

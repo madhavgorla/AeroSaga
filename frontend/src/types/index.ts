@@ -74,6 +74,8 @@ export interface Drone {
   headingDeg?: number;
   satellitesLocked?: number;
   signalRssi?: number;
+  totalFlightHours?: number;
+  maintenanceThresholdHours?: number;
 }
 
 export interface LiveDroneLocation {
@@ -91,6 +93,8 @@ export interface LiveDroneLocation {
   currentMissionId?: string;
   destination?: string;
   lastUpdated: string;
+  totalFlightHours?: number;
+  maintenanceThresholdHours?: number;
 }
 
 export interface HealthResponse {

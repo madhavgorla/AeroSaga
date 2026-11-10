@@ -21,6 +21,8 @@ const INITIAL_DRONES: Drone[] = [
     lastHeartbeat: new Date().toISOString(),
     speedKmh: 54,
     altitudeMeters: 120,
+    totalFlightHours: 84,
+    maintenanceThresholdHours: 100,
   },
   {
     droneId: 'DRONE-002',
@@ -32,6 +34,8 @@ const INITIAL_DRONES: Drone[] = [
     lastHeartbeat: new Date(Date.now() - 1000 * 60 * 8).toISOString(),
     speedKmh: 0,
     altitudeMeters: 95,
+    totalFlightHours: 168, // Exceeds threshold of 150h -> Flags maintenance warning indicator
+    maintenanceThresholdHours: 150,
   },
   {
     droneId: 'DRONE-003',
@@ -43,6 +47,8 @@ const INITIAL_DRONES: Drone[] = [
     lastHeartbeat: new Date().toISOString(),
     speedKmh: 0,
     altitudeMeters: 0,
+    totalFlightHours: 42,
+    maintenanceThresholdHours: 120,
   },
   {
     droneId: 'DRONE-004',
@@ -54,6 +60,8 @@ const INITIAL_DRONES: Drone[] = [
     lastHeartbeat: new Date().toISOString(),
     speedKmh: 0,
     altitudeMeters: 0,
+    totalFlightHours: 195, // Near threshold (195h / 200h)
+    maintenanceThresholdHours: 200,
   },
   {
     droneId: 'DRONE-005',
@@ -68,6 +76,8 @@ const INITIAL_DRONES: Drone[] = [
     headingDeg: 215,
     satellitesLocked: 17,
     signalRssi: -62,
+    totalFlightHours: 65,
+    maintenanceThresholdHours: 100,
   },
 ];
 
@@ -568,6 +578,8 @@ class ApiService {
                 target.satellitesLocked = liveD.satellitesLocked;
                 target.signalRssi = liveD.signalRssi;
                 target.lastHeartbeat = liveD.lastUpdated || new Date().toISOString();
+                if (liveD.totalFlightHours !== undefined) target.totalFlightHours = liveD.totalFlightHours;
+                if (liveD.maintenanceThresholdHours !== undefined) target.maintenanceThresholdHours = liveD.maintenanceThresholdHours;
               }
             });
             return [...this.drones];

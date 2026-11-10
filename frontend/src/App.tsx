@@ -38,6 +38,7 @@ import {
   Layers,
   Images,
   ChevronRight,
+  Wrench,
 } from 'lucide-react';
 
 function DashboardContent() {
@@ -646,53 +647,77 @@ function DashboardContent() {
 
                   {/* Clean Fleet List with Battery & Signal Controls */}
                   <div className="space-y-2.5 flex-1">
-                    {drones.map((d) => (
-                      <div
-                        key={d.droneId}
-                        className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`w-2 h-2 rounded-full ${
-                                  d.status === 'IN_FLIGHT'
-                                    ? 'bg-sky-400 animate-pulse'
-                                    : d.status === 'AVAILABLE'
-                                    ? 'bg-emerald-400'
-                                    : 'bg-rose-400'
-                                }`}
-                              />
-                              <span className="text-xs font-mono font-bold text-white">
-                                {d.droneId}
+                    {drones.map((d) => {
+                      const isMaintDue = (d.totalFlightHours ?? 0) >= (d.maintenanceThresholdHours ?? 100);
+                      return (
+                        <div
+                          key={d.droneId}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
+                            isMaintDue
+                              ? 'bg-amber-950/20 border-amber-500/40'
+                              : 'bg-slate-900/70 border-slate-800'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={`w-2 h-2 rounded-full ${
+                                    isMaintDue
+                                      ? 'bg-amber-400 animate-pulse'
+                                      : d.status === 'IN_FLIGHT'
+                                      ? 'bg-sky-400 animate-pulse'
+                                      : d.status === 'AVAILABLE'
+                                      ? 'bg-emerald-400'
+                                      : 'bg-rose-400'
+                                  }`}
+                                />
+                                <span className="text-xs font-mono font-bold text-white">
+                                  {d.droneId}
+                                </span>
+                                {isMaintDue && (
+                                  <span
+                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                    title={`Maintenance threshold exceeded: ${d.totalFlightHours}h / ${d.maintenanceThresholdHours}h`}
+                                  >
+                                    <Wrench className="w-2.5 h-2.5 text-amber-400" />
+                                    <span>Maint. Due ({d.totalFlightHours}h/{d.maintenanceThresholdHours}h)</span>
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {d.speedKmh ? `${d.speedKmh} km/h` : 'Standby'}
                               </span>
                             </div>
-                            <span className="text-[10px] font-mono text-slate-400">
-                              {d.speedKmh ? `${d.speedKmh} km/h` : 'Standby'}
-                            </span>
-                          </div>
 
-                          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
-                            <span className="truncate">{d.model}</span>
-                            <span className="font-mono font-medium text-slate-300">
-                              {d.batteryPercent}%
-                            </span>
-                          </div>
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+                              <span className="truncate">{d.model}</span>
+                              <div className="flex items-center gap-2 font-mono text-[10px]">
+                                {d.totalFlightHours !== undefined && (
+                                  <span className={isMaintDue ? 'text-amber-400 font-semibold' : 'text-slate-400'}>
+                                    {d.totalFlightHours}h flt
+                                  </span>
+                                )}
+                                <span className="font-medium text-slate-300">
+                                  {d.batteryPercent}%
+                                </span>
+                              </div>
+                            </div>
 
-                          {/* Mini Battery Health Bar */}
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${
-                                d.batteryPercent > 50
-                                  ? 'bg-emerald-400'
-                                  : d.batteryPercent > 20
-                                  ? 'bg-amber-400'
-                                  : 'bg-rose-500'
-                              }`}
-                              style={{ width: `${Math.max(5, d.batteryPercent)}%` }}
-                            />
+                            {/* Mini Battery Health Bar */}
+                            <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  d.batteryPercent > 50
+                                    ? 'bg-emerald-400'
+                                    : d.batteryPercent > 20
+                                    ? 'bg-amber-400'
+                                    : 'bg-rose-500'
+                                }`}
+                                style={{ width: `${Math.max(5, d.batteryPercent)}%` }}
+                              />
+                            </div>
                           </div>
-                        </div>
 
                         {/* Quick Signal Action */}
                         <div className="shrink-0 flex items-center gap-1.5 pl-2 border-l border-slate-800">
@@ -722,7 +747,8 @@ function DashboardContent() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 </div>
               </div>
